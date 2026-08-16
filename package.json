@@ -8,6 +8,7 @@
     "start": "electron .",
     "build:mac": "electron-builder --mac",
     "build:win": "electron-builder --win",
+    "build:all": "electron-builder -mw",
     "pack": "electron-builder --dir"
   },
   "keywords": [
@@ -24,11 +25,17 @@
   "build": {
     "appId": "com.luanyufei.kaoyanflow",
     "productName": "KaoyanFlow",
+    "publish": {
+      "provider": "github",
+      "owner": "luanyufei",
+      "repo": "KaoyanFlow"
+    },
     "mac": {
       "category": "public.app-category.education",
       "identity": null,
       "target": [
-        "dir"
+        "dmg",
+        "zip"
       ]
     },
     "win": {

@@ -158,9 +158,61 @@ ipcMain.handle('shell:openDataFolder', async () => {
 // ==========================================================================
 // 自动更新检查与进度下载引擎 (Auto-Updater IPC & Lifecycle)
 // ==========================================================================
+// 自动更新检查与真实发布包下载引擎 (Real Auto-Updater & Multi-Platform Delivery)
+// ==========================================================================
 
 const https = require('https');
+const http = require('http');
 let latestUpdateInfo = null;
+let downloadedInstallerPath = null;
+
+function downloadFileWithProgress(url, destPath, onProgress) {
+    return new Promise((resolve, reject) => {
+        const fileStream = fs.createWriteStream(destPath);
+
+        function getReq(targetUrl) {
+            const client = targetUrl.startsWith('https:') ? https : http;
+            client.get(targetUrl, { headers: { 'User-Agent': 'KaoyanFlow-Desktop' } }, (res) => {
+                if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+                    // 处理 GitHub Release 资产跳转 (AWS S3 302 重定向)
+                    return getReq(res.headers.location);
+                }
+                if (res.statusCode !== 200) {
+                    fileStream.close();
+                    fs.unlink(destPath, () => {});
+                    return reject(new Error(`下载更新失败，HTTP 状态码: ${res.statusCode}`));
+                }
+
+                const totalBytes = parseInt(res.headers['content-length'], 10) || 0;
+                let downloadedBytes = 0;
+
+                res.on('data', (chunk) => {
+                    downloadedBytes += chunk.length;
+                    fileStream.write(chunk);
+                    if (totalBytes > 0 && onProgress) {
+                        const percent = Math.min(100, Math.floor((downloadedBytes / totalBytes) * 100));
+                        onProgress({
+                            percent: percent,
+                            transferred: (downloadedBytes / (1024 * 1024)).toFixed(1) + ' MB',
+                            total: (totalBytes / (1024 * 1024)).toFixed(1) + ' MB'
+                        });
+                    }
+                });
+
+                res.on('end', () => {
+                    fileStream.end();
+                    resolve(destPath);
+                });
+            }).on('error', (err) => {
+                fileStream.close();
+                fs.unlink(destPath, () => {});
+                reject(err);
+            });
+        }
+
+        getReq(url);
+    });
+}
 
 async function checkGitHubUpdates() {
     return new Promise((resolve) => {
@@ -170,7 +222,7 @@ async function checkGitHubUpdates() {
             headers: {
                 'User-Agent': 'KaoyanFlow-Desktop'
             },
-            timeout: 5000
+            timeout: 6000
         };
 
         const req = https.get(options, (res) => {
@@ -184,6 +236,16 @@ async function checkGitHubUpdates() {
                         const latestTag = (release.tag_name || '').replace(/^v/i, '').trim();
 
                         if (latestTag && isNewerVersion(currentVersion, latestTag)) {
+                            const platform = process.platform;
+                            let matchedAsset = null;
+                            if (Array.isArray(release.assets)) {
+                                if (platform === 'darwin') {
+                                    matchedAsset = release.assets.find(a => a.name.endsWith('.dmg')) || release.assets.find(a => a.name.endsWith('.zip'));
+                                } else if (platform === 'win32') {
+                                    matchedAsset = release.assets.find(a => a.name.endsWith('.exe')) || release.assets.find(a => a.name.endsWith('.zip'));
+                                }
+                            }
+
                             latestUpdateInfo = {
                                 hasUpdate: true,
                                 currentVersion: currentVersion,
@@ -191,6 +253,7 @@ async function checkGitHubUpdates() {
                                 releaseName: release.name || `v${latestTag}`,
                                 releaseNotes: release.body || '',
                                 htmlUrl: release.html_url,
+                                matchedAsset: matchedAsset,
                                 assets: release.assets || []
                             };
                             return resolve(latestUpdateInfo);
@@ -236,39 +299,56 @@ ipcMain.handle('updater:check', async () => {
 });
 
 ipcMain.handle('updater:startDownload', async () => {
-    if (!mainWindow || mainWindow.isDestroyed()) return { success: false };
+    if (!latestUpdateInfo) return { success: false, error: '暂无可用更新' };
+    const matchedAsset = latestUpdateInfo.matchedAsset;
 
-    let percent = 0;
-    const progressInterval = setInterval(() => {
-        if (!mainWindow || mainWindow.isDestroyed()) {
-            clearInterval(progressInterval);
-            return;
+    if (!matchedAsset || !matchedAsset.browser_download_url) {
+        // 无直接适配本平台的预编译安装包时，直接在浏览器中打开 GitHub Release 发布页
+        if (latestUpdateInfo.htmlUrl) {
+            shell.openExternal(latestUpdateInfo.htmlUrl);
         }
+        return { success: true, openedBrowser: true };
+    }
 
-        // 平滑渐进式进度增长 (模拟下载进度流)
-        const increment = Math.floor(Math.random() * 8) + 5;
-        percent = Math.min(100, percent + increment);
+    try {
+        const downloadsDir = app.getPath('downloads');
+        const targetFilePath = path.join(downloadsDir, matchedAsset.name);
+        downloadedInstallerPath = targetFilePath;
 
-        mainWindow.webContents.send('updater:download-progress', {
-            percent: percent,
-            transferred: (percent * 0.85).toFixed(1) + ' MB',
-            total: '85.0 MB'
+        await downloadFileWithProgress(matchedAsset.browser_download_url, targetFilePath, (progress) => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.webContents.send('updater:download-progress', progress);
+            }
         });
 
-        if (percent >= 100) {
-            clearInterval(progressInterval);
+        if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('updater:update-downloaded', {
-                version: latestUpdateInfo ? latestUpdateInfo.latestVersion : '最新版'
+                version: latestUpdateInfo.latestVersion,
+                filePath: targetFilePath
             });
         }
-    }, 200);
-
-    return { success: true };
+        return { success: true, filePath: targetFilePath };
+    } catch (err) {
+        console.error('[AutoUpdate] 真实下载失败，降级在浏览器中打开:', err);
+        if (latestUpdateInfo.htmlUrl) {
+            shell.openExternal(latestUpdateInfo.htmlUrl);
+        }
+        return { success: false, error: err.message };
+    }
 });
 
 ipcMain.handle('updater:quitAndInstall', async () => {
-    app.relaunch();
-    app.exit(0);
+    if (downloadedInstallerPath && fs.existsSync(downloadedInstallerPath)) {
+        shell.showItemInFolder(downloadedInstallerPath);
+        if (downloadedInstallerPath.endsWith('.dmg') || downloadedInstallerPath.endsWith('.exe')) {
+            shell.openPath(downloadedInstallerPath);
+        }
+    } else if (latestUpdateInfo?.htmlUrl) {
+        shell.openExternal(latestUpdateInfo.htmlUrl);
+    }
+    setTimeout(() => {
+        app.quit();
+    }, 1000);
 });
 
 // ==========================================================================
