@@ -47,9 +47,9 @@
           ]
         },
         {
-          "target": "portable",
+          "target": "nsis",
           "arch": [
-            "x64"
+            "arm64"
           ]
         }
       ]
