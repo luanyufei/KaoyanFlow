@@ -1,6 +1,6 @@
 <div align="center">
 
-# <img src="https://api.iconify.design/fa6-solid:graduation-cap.svg?color=%232563eb" width="32" height="32" style="vertical-align: -6px;" /> KaoyanFlow (考研心流)
+# <img src="https://api.iconify.design/fa6-solid:graduation-cap.svg?color=%232563eb" width="32" height="32" style="vertical-align: -6px;" /> KaoyanFlow
 
 <p align="center">
   <strong>现代化 · 任务驱动型 · 全周期考研备考排期与宏观进度攻坚系统</strong>
