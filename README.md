@@ -147,7 +147,7 @@ KaoyanFlow/
 
 ---
 
-## <img src="https://api.iconify.design/fa6-solid:heart.svg?color=%23ec4899" width="20" height="20" style="vertical-align: -3px;" /> 作者与鸣谢
+## <img src="https://api.iconify.design/fa6-solid:heart.svg?color=%23ec4899" width="20" height="20" style="vertical-align: -3px;" /> 关于作者
 
 - **作者**：**FEEFEENOON**
 - **GitHub**：[@luanyufei](https://github.com/luanyufei)
