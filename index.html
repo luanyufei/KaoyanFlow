@@ -1,0 +1,2097 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="KaoyanFlow - 专为考研人打造的现代化、任务驱动型备考排期与进度攻坚看板系统">
+    <title>KaoyanFlow · 现代化任务驱动型考研备考系统</title>
+    <!-- Fonts & Font Awesome 6 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="vendor/fontawesome/css/all.min.css">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Toast Notification Container -->
+    <div id="toast-container" aria-live="polite"></div>
+
+    <!-- Electron Desktop Native Window Title Bar (VSCode Style) -->
+    <div class="desktop-titlebar" id="desktop-titlebar">
+        <div class="titlebar-left">
+            <div class="titlebar-traffic-space"></div>
+        </div>
+        
+        <!-- Center Workspace Selector (居中工作区切换胶囊) -->
+        <div class="titlebar-center">
+            <div class="titlebar-workspace-wrapper" id="brand-workspace-wrapper">
+                <button class="titlebar-workspace-btn" id="btn-workspace-selector" title="点击切换或新建考研规划区">
+                    <i class="fa-solid fa-graduation-cap titlebar-app-icon"></i>
+                    <span class="titlebar-ws-title" id="titlebar-workspace-name">考研人的27考研规划</span>
+                    <span class="badge-sample-workspace" id="titlebar-sample-badge" style="display: none; margin-left: 6px;">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i> 样板示范
+                    </span>
+                    <i class="fa-solid fa-chevron-down titlebar-chevron"></i>
+                </button>
+
+                <!-- Workspace Dropdown Menu -->
+                <div class="workspace-dropdown-menu" id="workspace-dropdown-menu">
+                    <div class="workspace-menu-header">切换规划区 (Workspaces)</div>
+                    <div class="workspace-list-items" id="workspace-list-items">
+                        <!-- Populated dynamically by app.js -->
+                    </div>
+                    <div class="workspace-menu-divider"></div>
+                    <button class="workspace-menu-action" id="btn-new-workspace">
+                        <i class="fa-solid fa-circle-plus"></i>
+                        <span>新建考研规划区...</span>
+                    </button>
+                    <button class="workspace-menu-action" id="btn-import-new-workspace">
+                        <i class="fa-solid fa-file-import" style="color:var(--color-primary);"></i>
+                        <span>导入规划数据作为新规划区...</span>
+                    </button>
+                    <button class="workspace-menu-action" id="btn-open-trash-bin" style="color:var(--text-secondary);">
+                        <i class="fa-solid fa-trash-can" style="color:var(--text-muted);"></i>
+                        <span>规划区回收站 (垃圾桶)...</span>
+                    </button>
+                    <button class="workspace-menu-action" id="btn-open-workspace-settings">
+                        <i class="fa-solid fa-gear"></i>
+                        <span>规划区全局设置</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Right Section: Auto-Update & Hamburger Menu -->
+        <div class="titlebar-right">
+            <!-- Update Notification & Progress Capsule (更新检查、下载进度与立即重启胶囊) -->
+            <div class="titlebar-update-container" id="titlebar-update-container" style="display: none;">
+                <button class="titlebar-update-btn state-available" id="btn-titlebar-update" title="发现新版本，点击下载更新">
+                    <i class="fa-solid fa-arrow-down icon-update-idle"></i>
+                    <i class="fa-solid fa-circle-notch fa-spin icon-update-loading" style="display: none;"></i>
+                    <i class="fa-solid fa-arrows-rotate icon-update-restart" style="display: none;"></i>
+                    <span class="update-text" id="update-text" style="display: none;">0%</span>
+                </button>
+            </div>
+
+            <div class="titlebar-menu-wrapper" id="titlebar-menu-wrapper">
+                <button class="titlebar-icon-btn" id="btn-titlebar-menu" title="功能与工具菜单">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
+
+                <!-- Top-Right Actions Dropdown Menu -->
+                <div class="titlebar-dropdown-menu" id="titlebar-dropdown-menu">
+                    <button class="menu-dropdown-item" id="btn-smart-shift">
+                        <i class="fa-solid fa-bolt" style="color:var(--color-primary);"></i>
+                        <div class="menu-dropdown-text">
+                            <span class="menu-item-name">智能顺延排期</span>
+                            <span class="menu-item-desc">遇到临时突发情况向后顺延任务</span>
+                        </div>
+                    </button>
+                    <button class="menu-dropdown-item" id="btn-batch-fill">
+                        <i class="fa-solid fa-wand-magic-sparkles" style="color:var(--color-secondary);"></i>
+                        <div class="menu-dropdown-text">
+                            <span class="menu-item-name">规律排期向导</span>
+                            <span class="menu-item-desc">按周期自动批量生成做题/复习日程</span>
+                        </div>
+                    </button>
+                    <button class="menu-dropdown-item" id="btn-print-view">
+                        <i class="fa-solid fa-print"></i>
+                        <span class="menu-item-name">打印 / 导出视图</span>
+                    </button>
+
+                    <div class="menu-dropdown-divider"></div>
+                    <button class="menu-dropdown-item" id="btn-export-json">
+                        <i class="fa-solid fa-download"></i>
+                        <span class="menu-item-name">导出规划备份 (.json)</span>
+                    </button>
+                    <button class="menu-dropdown-item" id="btn-import-json">
+                        <i class="fa-solid fa-upload"></i>
+                        <span class="menu-item-name">导入数据恢复</span>
+                    </button>
+
+                    <div class="menu-dropdown-divider"></div>
+                    <div class="menu-theme-segmented-group" style="padding: 6px 12px 8px 12px; display: flex; flex-direction: column; gap: 5px;">
+                        <div style="font-size: 11px; color: var(--text-muted); display: flex; align-items: center; justify-content: space-between;">
+                            <span><i class="fa-solid fa-circle-half-stroke" style="margin-right: 4px;"></i> 界面外观样式</span>
+                            <span id="menu-current-theme-badge" style="font-size: 10px; color: var(--color-primary); font-weight: 600;">跟随系统</span>
+                        </div>
+                        <div class="theme-segmented-control" id="theme-segmented-control">
+                            <button type="button" class="theme-seg-btn" data-theme-choice="light" title="保持浅色">
+                                <i class="fa-solid fa-sun"></i> 浅色
+                            </button>
+                            <button type="button" class="theme-seg-btn active" data-theme-choice="system" title="跟随系统自动适应">
+                                <i class="fa-solid fa-circle-half-stroke"></i> 跟随
+                            </button>
+                            <button type="button" class="theme-seg-btn" data-theme-choice="dark" title="保持深色">
+                                <i class="fa-solid fa-moon"></i> 深色
+                            </button>
+                        </div>
+                    </div>
+                    <button class="menu-dropdown-item" id="btn-top-settings">
+                        <i class="fa-solid fa-gear" style="color:var(--color-primary);"></i>
+                        <span class="menu-item-name">规划区全局设置</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Navigation Header (顶部仅保留4大板块导航 Tab，最大化视觉空间) -->
+    <header class="app-header">
+        <nav class="main-tabs" aria-label="主要视图导航">
+            <button class="tab-btn active" data-tab="tab-timeline">
+                <i class="fa-solid fa-calendar-days tab-icon"></i>
+                <span class="tab-text">每日日程规划</span>
+                <span class="tab-badge" id="badge-total-days">--天</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-subjects">
+                <i class="fa-solid fa-chart-pie tab-icon"></i>
+                <span class="tab-text">学科看板 & 进度</span>
+                <span class="tab-badge" id="badge-task-count">全科总览</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-milestones">
+                <i class="fa-solid fa-bullseye tab-icon"></i>
+                <span class="tab-text">月度里程碑</span>
+                <span class="tab-badge" id="badge-milestone-count">战略目标</span>
+            </button>
+            <button class="tab-btn" data-tab="tab-presets">
+                <i class="fa-solid fa-layer-group tab-icon"></i>
+                <span class="tab-text">任务预设管理</span>
+                <span class="tab-badge" id="badge-preset-count">自由定制</span>
+            </button>
+        </nav>
+    </header>
+
+    <!-- Main Container -->
+    <main class="main-layout">
+
+        <!-- Empty Workspace Welcome State (当规划区全部被删除时的空白欢迎页) -->
+        <div class="empty-workspace-screen" id="empty-workspace-screen" style="display: none;">
+            <div class="empty-workspace-card">
+                <div class="empty-workspace-icon-box">
+                    <i class="fa-solid fa-graduation-cap"></i>
+                </div>
+                <h1 class="empty-workspace-title">KaoyanFlow</h1>
+                <p class="empty-workspace-subtitle">全流程科学考研规划系统</p>
+                <p class="empty-workspace-desc">当前暂无任何考研规划区。点击下方按钮即可开启你的考研攻坚之旅。</p>
+                <div style="display: flex; gap: 12px; justify-content: center; align-items: center; flex-wrap: wrap;">
+                    <button type="button" class="btn btn-secondary" id="btn-open-sample-workspace" style="padding: 12px 22px; font-size: 14.5px; font-weight: 600; border-radius: var(--radius-md); cursor: pointer;">
+                        <i class="fa-solid fa-wand-magic-sparkles" style="margin-right: 6px; color: #f59e0b;"></i> 打开样板规划区
+                    </button>
+                    <button type="button" class="btn btn-primary" id="btn-create-first-workspace" style="padding: 12px 28px; font-size: 15px; font-weight: 700; border-radius: var(--radius-md); box-shadow: var(--shadow-md); cursor: pointer;">
+                        <i class="fa-solid fa-rocket" style="margin-right: 6px;"></i> 开始创建我的第一个规划区
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== TAB 1: 每日三段日程 ==================== -->
+        <section class="tab-content active" id="tab-timeline">
+            <!-- Timeline Filter Toolbar -->
+            <div class="timeline-toolbar">
+                <div class="toolbar-left">
+                    <!-- Dynamic Month Selector Pills Container -->
+                    <div class="month-pill-group" id="month-filters">
+                        <!-- Populated dynamically by app.js based on workspace date range -->
+                        <button class="month-pill active" data-month="all">全部</button>
+                    </div>
+                </div>
+
+                <div class="toolbar-right">
+                    <!-- Past Days Checkbox Toggle -->
+                    <label class="past-days-toggle" title="勾选后展示今天之前的历史日期，默认折叠隐藏">
+                        <input type="checkbox" id="chk-show-past-days">
+                        <i class="fa-solid fa-clock-rotate-left" style="font-size:11px; margin-right:2px;"></i>
+                        <span>显示过去日期</span>
+                    </label>
+
+                    <!-- Search Input -->
+                    <div class="search-input-wrapper">
+                        <i class="fa-solid fa-magnifying-glass search-icon"></i>
+                        <input type="text" class="input-search" id="input-timeline-search" placeholder="搜索...">
+                    </div>
+
+                    <!-- Filter by Type -->
+                    <select class="select-filter" id="select-day-filter">
+                        <option value="all">全部天数</option>
+                        <option value="study">仅学习日</option>
+                        <option value="rest">仅休息日</option>
+                    </select>
+
+                    <select class="select-filter" id="select-subject-filter">
+                        <option value="all">全部学科</option>
+                        <option value="math">数学一</option>
+                        <option value="major">通信原理</option>
+                        <option value="english">英语一</option>
+                        <option value="politics">政治</option>
+                    </select>
+
+                    <!-- View Switcher Toggle -->
+                    <div class="view-mode-group">
+                        <button class="view-mode-btn active" id="btn-view-table" data-mode="table" title="紧凑表格视图 (极简省空间)">
+                            <i class="fa-solid fa-table-list"></i>
+                            <span>紧凑表格</span>
+                        </button>
+                        <button class="view-mode-btn" id="btn-view-week" data-mode="week" title="周历大网格视图">
+                            <i class="fa-solid fa-calendar-week"></i>
+                            <span>周历网格</span>
+                        </button>
+                        <button class="view-mode-btn" id="btn-view-month" data-mode="month" title="月度日历视图 (一星期一行，方格紧凑日历)">
+                            <i class="fa-solid fa-calendar-days"></i>
+                            <span>月度日历</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Monthly Milestone Dynamic Banner (点全部隐藏，点月份展示该月里程碑) -->
+            <div class="timeline-info-banner" id="timeline-month-banner" style="display: none;">
+                <!-- Dynamically rendered by app.js -->
+            </div>
+
+            <!-- Over-12.20 Task Overflow Warning Banner (顺延超出12.20初试范围警告) -->
+            <div class="overflow-alert-banner" id="overflow-alert-banner" style="display: none;">
+                <div class="overflow-alert-content">
+                    <span class="overflow-alert-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                    <span class="overflow-alert-text" id="overflow-alert-text">任务超出初试范围（12.21+），需向前提前排期消除超期占位！</span>
+                </div>
+                <div class="overflow-alert-actions">
+                    <button class="btn btn-xs btn-outline" id="btn-quick-fix-overflow" style="background:#fff; color:var(--color-danger); border-color:currentColor;">
+                        <i class="fa-solid fa-forward-fast"></i> 自动向前紧凑排期
+                    </button>
+                </div>
+            </div>
+
+            <!-- Timeline Container -->
+            <div class="timeline-grid" id="timeline-container">
+                <!-- Dynamically rendered by app.js -->
+            </div>
+        </section>
+
+        <!-- ==================== TAB 2: 宏观阶段 & 学科看板 (升级版数据分析与饼图仪表盘) ==================== -->
+        <section class="tab-content" id="tab-subjects">
+            <div class="subjects-layout">
+
+                <!-- 📅 宏观月度筛选与分析工具栏 (Macro Month Toolbar & Chart Switcher) -->
+                <div class="macro-filter-toolbar">
+                    <div class="macro-filter-left">
+                        <span class="macro-filter-label"><i class="fa-solid fa-calendar-days"></i> 统计范围：</span>
+                        <div class="month-pill-group" id="macro-month-filters">
+                            <!-- Dynamically generated by app.js -->
+                        </div>
+                    </div>
+                    <div class="macro-filter-right">
+                        <div class="donut-mode-switcher">
+                            <button type="button" class="macro-mode-pill active" id="btn-mode-subject" onclick="window.setDonutChartMode('subject')">
+                                <i class="fa-solid fa-chart-pie"></i> 学科总览
+                            </button>
+                            <button type="button" class="macro-mode-pill" id="btn-mode-module" onclick="window.setDonutChartMode('module')">
+                                <i class="fa-solid fa-layer-group"></i> 重点板块细分
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🌟 考研全局全景仪表盘 (Global Analytics Dashboard & Donut Charts) -->
+                <div class="analytics-dashboard" id="analytics-dashboard">
+                    <div class="analytics-card-main">
+                        <div class="donut-chart-box">
+                            <!-- SVG Donut Chart -->
+                            <div class="svg-donut-container" id="svg-donut-container">
+                                <svg viewBox="0 0 160 160" class="donut-svg" id="donut-svg-element">
+                                    <circle class="donut-ring-bg" cx="80" cy="80" r="62" fill="transparent" stroke-width="15"></circle>
+                                    <g id="donut-segments-group">
+                                        <circle id="donut-segment-math" class="donut-segment segment-math" cx="80" cy="80" r="62" fill="transparent" stroke-width="15"></circle>
+                                        <circle id="donut-segment-major" class="donut-segment segment-major" cx="80" cy="80" r="62" fill="transparent" stroke-width="15"></circle>
+                                        <circle id="donut-segment-english" class="donut-segment segment-english" cx="80" cy="80" r="62" fill="transparent" stroke-width="15"></circle>
+                                        <circle id="donut-segment-politics" class="donut-segment segment-politics" cx="80" cy="80" r="62" fill="transparent" stroke-width="15"></circle>
+                                    </g>
+                                </svg>
+                                <div class="donut-center-text">
+                                    <span class="donut-center-val" id="donut-total-pct">0%</span>
+                                    <span class="donut-center-label" id="donut-center-title">总计划完成度</span>
+                                </div>
+                            </div>
+
+                            <div class="donut-legend" id="donut-legend">
+                                <!-- Dynamically populated by renderAnalyticsDashboard -->
+                            </div>
+                        </div>
+
+                        <div class="analytics-kpi-grid">
+                            <div class="kpi-card">
+                                <div class="kpi-icon"><i class="fa-solid fa-book-bookmark"></i></div>
+                                <div class="kpi-info">
+                                    <span class="kpi-label">全周期总排期课时</span>
+                                    <div class="kpi-num" id="kpi-total-tasks">-- 课时</div>
+                                    <span class="kpi-sub" id="kpi-completed-tasks">已打卡完成 --</span>
+                                </div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-icon"><i class="fa-solid fa-calendar-check"></i></div>
+                                <div class="kpi-info">
+                                    <span class="kpi-label">备考日程覆盖</span>
+                                    <div class="kpi-num" id="kpi-study-days">-- 天</div>
+                                    <span class="kpi-sub" id="kpi-rest-days">包含 -- 天例行休息</span>
+                                </div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-icon"><i class="fa-solid fa-flag-checkered"></i></div>
+                                <div class="kpi-info">
+                                    <span class="kpi-label">初试冲刺倒计时</span>
+                                    <div class="kpi-num" id="kpi-exam-countdown">-- 天</div>
+                                    <span class="kpi-sub" id="kpi-exam-date">目标 --</span>
+                                </div>
+                            </div>
+                            <div class="kpi-card">
+                                <div class="kpi-icon"><i class="fa-solid fa-fire-flame-curved"></i></div>
+                                <div class="kpi-info">
+                                    <span class="kpi-label">当前主线攻坚板块</span>
+                                    <div class="kpi-highlight" id="kpi-current-phase">--</div>
+                                    <span class="kpi-sub" id="kpi-phase-dates">--</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 4 Subject Macro Progress Columns (带环形进度圈) -->
+                <div class="macro-subjects-grid" id="macro-subjects-container">
+                    <!-- Dynamically rendered by app.js -->
+                </div>
+            </div>
+        </section>
+
+        <!-- ==================== TAB 3: 月度里程碑 (支持自由编辑) ==================== -->
+        <section class="tab-content" id="tab-milestones">
+            <div class="milestones-header-banner">
+                <div class="milestones-title-group">
+                    <h2><i class="fa-solid fa-bullseye" style="color:var(--color-primary); margin-right:6px;"></i> 月度备考里程碑</h2>
+                    <p>分阶段规划各科战略重心，步步为营，决胜初试</p>
+                </div>
+                <div class="milestones-meta">
+                    <button class="btn btn-primary btn-sm" id="btn-create-milestone">
+                        <i class="fa-solid fa-plus"></i>
+                        <span>新建月度里程碑</span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="milestones-grid" id="milestones-container">
+                <!-- Milestones injected dynamically -->
+            </div>
+        </section>
+
+        <!-- ==================== TAB 4: 题库与预设库管理中心 (全新第4主Tab) ==================== -->
+        <section class="tab-content" id="tab-presets">
+            <div class="preset-hub-container">
+                <div class="preset-hub-header">
+                    <div class="preset-hub-title-group">
+                        <h2><i class="fa-solid fa-database" style="color:var(--color-primary); margin-right:6px;"></i> 任务预设管理</h2>
+                        <p>自由新建或重命名各科板块（如660、880、真题），增删改章节考点预设，全自动化同步至日程编辑菜单</p>
+                    </div>
+                </div>
+
+                <!-- 学科快速选择与管理栏 -->
+                <div class="preset-hub-nav-wrapper">
+                    <div class="preset-hub-subject-nav" id="hub-subject-nav">
+                        <button class="hub-sub-btn active" data-subject="math"><i class="fa-solid fa-calculator"></i> 数学一</button>
+                        <button class="hub-sub-btn" data-subject="major"><i class="fa-solid fa-tower-broadcast"></i> 通信原理</button>
+                        <button class="hub-sub-btn" data-subject="english"><i class="fa-solid fa-language"></i> 英语一</button>
+                        <button class="hub-sub-btn" data-subject="politics"><i class="fa-solid fa-landmark"></i> 思想政治理论</button>
+                    </div>
+                    <button type="button" class="btn btn-sm btn-outline" id="btn-open-manage-subjects" title="管理/修改各科名称、新增专业课、清空学科排期任务">
+                        <i class="fa-solid fa-pen-to-square"></i>
+                        <span>管理学科</span>
+                    </button>
+                </div>
+
+                <!-- 主管理双栏布局 -->
+                <div class="preset-hub-split-layout">
+                    <!-- 左栏：板块 / 题库管理 -->
+                    <div class="hub-pane-left">
+                        <div class="pane-header">
+                            <div class="pane-title-row">
+                                <span class="pane-icon"><i class="fa-solid fa-folder-tree"></i></span>
+                                <h4>板块 / 题库列表</h4>
+                            </div>
+                            <button class="btn btn-xs btn-primary" id="btn-hub-add-submodule"><i class="fa-solid fa-plus"></i> 新增板块</button>
+                        </div>
+
+                        <div class="submodule-list-group" id="hub-submodule-list-container">
+                            <!-- Populated dynamically -->
+                        </div>
+                    </div>
+
+                    <!-- 右栏：章节考点预设管理 -->
+                    <div class="hub-pane-right">
+                        <div class="pane-header">
+                            <div class="pane-title-row">
+                                <span class="pane-icon"><i class="fa-solid fa-list-check"></i></span>
+                                <div>
+                                    <h4 id="hub-current-mod-title">当前板块考点预设</h4>
+                                    <span class="pane-sub" id="hub-current-mod-meta">共包含 18 项考点章节</span>
+                                </div>
+                            </div>
+
+                            <!-- 模式切换：列表 vs 多行批量文本 -->
+                            <div class="edit-mode-tabs" id="hub-view-tabs" style="width: auto;">
+                                <button type="button" class="edit-mode-tab active" data-tab="hub-list"><i class="fa-solid fa-list-ol"></i> 列表排序</button>
+                                <button type="button" class="edit-mode-tab" data-tab="hub-batch"><i class="fa-solid fa-align-left"></i> 批量文本</button>
+                            </div>
+                        </div>
+
+                        <!-- 660 专属题型选择 (选择题 / 填空题) -->
+                        <div class="form-group mb-2" id="hub-qtype-group" style="display: none;">
+                            <label class="form-label">题型切换：</label>
+                            <div class="cascade-radio-chips" id="hub-qtype-chips">
+                                <button type="button" class="cascade-chip active" data-value="choice"><i class="fa-regular fa-circle-dot"></i> 选择题</button>
+                                <button type="button" class="cascade-chip" data-value="blank"><i class="fa-solid fa-pen-clip"></i> 填空题</button>
+                            </div>
+                        </div>
+
+                        <!-- 视图 1: 列表模式 -->
+                        <div id="hub-view-list-pane">
+                            <div class="preset-add-bar">
+                                <input type="text" class="form-input" id="hub-input-new-preset" placeholder="输入新考点/章节名称，例如：函数极限计算技巧专题">
+                                <button type="button" class="btn btn-primary" id="btn-hub-add-item">
+                                    <i class="fa-solid fa-plus"></i>
+                                    <span>添加考点</span>
+                                </button>
+                            </div>
+
+                            <div class="preset-items-list" id="hub-preset-items-container" style="max-height: 480px;">
+                                <!-- Items injected dynamically -->
+                            </div>
+                        </div>
+
+                        <!-- 视图 2: 批量多行文本模式 -->
+                        <div id="hub-view-batch-pane" style="display: none;">
+                            <div class="form-group">
+                                <label class="form-label">每行一个考点章节（支持直接换行粘贴多条）：</label>
+                                <textarea class="form-textarea json-textarea" id="hub-batch-textarea" rows="16" placeholder="每行输入一个考点..."></textarea>
+                            </div>
+                            <button type="button" class="btn btn-primary btn-block" id="btn-hub-save-batch">
+                                <i class="fa-solid fa-floppy-disk"></i>
+                                <span>批量保存多行考点数据</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- ==================== MODALS ==================== -->
+
+    <!-- Modal 0: 统一编辑时段计划菜单 (Edit Slot Menu Modal) -->
+    <div class="modal-overlay" id="modal-cascading-picker" aria-hidden="true">
+        <div class="modal-card modal-card-wide">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon"><i class="fa-solid fa-pen-to-square"></i></span>
+                    <h3 id="picker-modal-title">编辑时段计划</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-picker">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- 样板间只读提示横幅 -->
+                <div id="picker-readonly-banner" class="modal-readonly-banner" style="display:none;">
+                    <i class="fa-solid fa-lock" style="margin-right:6px;"></i> 样板间示范数据仅供查看，所有字段已锁定不可编辑
+                </div>
+
+                <div class="picker-top-bar" id="picker-top-bar">
+                    <div class="picker-target-date-badge">
+                        <i class="fa-regular fa-calendar" style="margin-right:4px;"></i>
+                        <span>目标日期：</span>
+                        <strong id="picker-target-date-display">2026-08-17</strong>
+                    </div>
+                    <div class="picker-slot-tabs" id="picker-slot-tabs">
+                        <button type="button" class="slot-tab-btn active" data-slot="morning">
+                            <i class="fa-regular fa-sun" style="margin-right:4px;"></i>
+                            <span>上午</span>
+                        </button>
+                        <button type="button" class="slot-tab-btn" data-slot="afternoon">
+                            <i class="fa-solid fa-sun" style="margin-right:4px;"></i>
+                            <span>下午</span>
+                        </button>
+                        <button type="button" class="slot-tab-btn" data-slot="evening">
+                            <i class="fa-solid fa-moon" style="margin-right:4px;"></i>
+                            <span>晚上</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 模式切换: 预设 vs 自定义 -->
+                <div class="form-group">
+                    <label class="form-label">编辑方式：</label>
+                    <div class="edit-mode-tabs" id="edit-mode-tabs">
+                        <button type="button" class="edit-mode-tab active" data-tab="mode-preset">
+                            <i class="fa-solid fa-list-check" style="margin-right:4px;"></i>
+                            <span>从题库与知识库预设选择</span>
+                        </button>
+                        <button type="button" class="edit-mode-tab" data-tab="mode-custom">
+                            <i class="fa-solid fa-pen-nib" style="margin-right:4px;"></i>
+                            <span>直接自定义输入</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Section A: 预设模式 -->
+                <div id="section-picker-preset">
+                    <!-- Cascade Level 1: 学科 -->
+                    <div class="form-group">
+                        <label class="form-label">第 1 步 · 选择学科：</label>
+                        <div class="cascade-radio-chips" id="picker-subject-chips">
+                            <button type="button" class="cascade-chip active" data-value="math"><i class="fa-solid fa-calculator"></i> 数学一</button>
+                            <button type="button" class="cascade-chip" data-value="major"><i class="fa-solid fa-tower-broadcast"></i> 通信原理</button>
+                            <button type="button" class="cascade-chip" data-value="english"><i class="fa-solid fa-language"></i> 英语一</button>
+                            <button type="button" class="cascade-chip" data-value="politics"><i class="fa-solid fa-landmark"></i> 思想政治</button>
+                        </div>
+                    </div>
+
+                    <!-- Cascade Level 2: 板块 / 题库 (全学科统一) -->
+                    <div class="form-group" id="group-submodule">
+                        <label class="form-label" id="label-submodule">第 2 步 · 选择板块/题库：</label>
+                        <select class="form-input" id="picker-submodule-select">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+
+                    <!-- Cascade Level 3: 题型 (仅660题专属：选择题 / 填空题) -->
+                    <div class="form-group" id="group-question-type" style="display: none;">
+                        <label class="form-label">第 3 步 · 题型 (660专属)：</label>
+                        <div class="cascade-radio-chips" id="picker-qtype-chips">
+                            <button type="button" class="cascade-chip active" data-value="choice"><i class="fa-regular fa-circle-dot"></i> 选择题</button>
+                            <button type="button" class="cascade-chip" data-value="blank"><i class="fa-solid fa-pen-clip"></i> 填空题</button>
+                        </div>
+                    </div>
+
+                    <!-- Cascade Level 4: 预设章节 / 考点 -->
+                    <div class="form-group">
+                        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 2px;">
+                            <label class="form-label" style="margin-bottom: 0;">第 4 步 · 预设章节考点：</label>
+                            <button type="button" class="btn btn-xs btn-outline" id="btn-quick-manage-presets" title="前往任务预设管理">
+                                <i class="fa-solid fa-gears"></i> 前往任务预设管理
+                            </button>
+                        </div>
+                        <select class="form-input" id="picker-preset-select">
+                            <!-- Populated dynamically -->
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Section B: 直接自定义模式 -->
+                <div id="section-picker-custom" style="display: none;">
+                    <div class="form-group">
+                        <label class="form-label">选择学科归属：</label>
+                        <select class="form-input" id="custom-input-subject">
+                            <option value="math">数学</option>
+                            <option value="major">专业课</option>
+                            <option value="english">英语</option>
+                            <option value="politics">思想政治理论</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- 最终确认与自定义微调 -->
+                <div class="form-group">
+                    <label class="form-label">计划内容（可直接修改）：</label>
+                    <textarea class="form-textarea" id="picker-final-text" rows="3" placeholder="在此输入或微调该时段的计划内容..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-picker">取消</button>
+                <button class="btn btn-primary" id="btn-confirm-picker"><i class="fa-solid fa-check"></i> 保存计划</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 0.8: ⚠️ 计划关联变动影响确认弹窗 (Cascade Sync Warning Modal) -->
+    <div class="modal-overlay" id="modal-cascade-sync" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon"><i class="fa-solid fa-triangle-exclamation"></i></span>
+                    <h3>检测到日程计划关联变动</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-cascade-sync">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc" id="cascade-sync-desc">
+                    你修改/删除的预设在日程表中已有安排。
+                </p>
+                <div class="cascade-impact-box" id="cascade-impact-box">
+                    <span class="impact-title" id="cascade-impact-title">受影响的任务数量：0 个</span>
+                    <ul class="impact-list" id="cascade-impact-list">
+                        <!-- Impacted dates list -->
+                    </ul>
+                </div>
+                <p class="modal-desc" style="font-weight: 600; margin-top: 4px;">
+                    请选择日程表中这些已有任务的处理方式：
+                </p>
+            </div>
+            <div class="modal-footer" style="flex-direction: column; align-items: stretch; gap: 6px;">
+                <button class="btn btn-primary btn-block" id="btn-sync-action-update">
+                    <i class="fa-solid fa-rotate"></i> <span>同步批量更新为新考点名称</span>
+                </button>
+                <button class="btn btn-outline btn-block" id="btn-sync-action-clear" style="color: var(--color-danger);">
+                    <i class="fa-solid fa-trash"></i> <span>清空受影响时段的任务内容</span>
+                </button>
+                <button class="btn btn-ghost btn-block" id="btn-sync-action-keep">
+                    <i class="fa-solid fa-ban"></i> <span>保持原日程文本不变 (仅修改预设库)</span>
+                </button>
+                <button class="btn btn-ghost btn-block btn-xs" id="btn-sync-action-cancel" style="color: var(--text-muted);">
+                    <span>取消本次修改</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 0.9: 新增/编辑板块题库弹窗 (Submodule Editor Modal) -->
+    <div class="modal-overlay" id="modal-edit-submodule" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon"><i class="fa-solid fa-book-bookmark"></i></span>
+                    <h3 id="submodule-modal-title">新建板块 / 题库</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-submodule-edit">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- 样板间只读提示横幅 -->
+                <div id="submodule-readonly-banner" class="modal-readonly-banner" style="display: none;">
+                    <i class="fa-solid fa-lock" style="margin-right:6px;"></i> 样板间示范数据仅供查看，所有字段已锁定不可编辑
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="submodule-input-name">板块名称：</label>
+                    <input type="text" class="form-input" id="submodule-input-name" placeholder="例如：通信原理期末核心大题集 / 李范全书">
+                </div>
+
+                <div class="form-group checkbox-group" id="group-submodule-has-qtype">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="submodule-input-has-qtype">
+                        <span>区分选择题与填空题两种子题型 (如660模式)</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-submodule-edit">取消</button>
+                <button class="btn btn-primary" id="btn-save-submodule"><i class="fa-solid fa-check"></i> 保存板块</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 0.95: 编辑/新建月度战略里程碑 (Milestone Editor Modal) -->
+    <div class="modal-overlay" id="modal-edit-milestone" aria-hidden="true">
+        <div class="modal-card modal-card-wide">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon"><i class="fa-solid fa-bullseye"></i></span>
+                    <h3 id="milestone-modal-title">编辑月度战略里程碑</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-milestone-edit">✕</button>
+            </div>
+            <div class="modal-body">
+                <!-- 样板间只读提示横幅 -->
+                <div id="milestone-readonly-banner" class="modal-readonly-banner" style="display:none;">
+                    <i class="fa-solid fa-lock" style="margin-right:6px;"></i> 样板间示范数据仅供查看，所有字段已锁定不可编辑
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="milestone-input-month">所属月份代号 (YYYY-MM)：</label>
+                    <input type="text" class="form-input" id="milestone-input-month" placeholder="2026-08">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="milestone-input-title">月度主题标题：</label>
+                    <input type="text" class="form-input" id="milestone-input-title" placeholder="例如：8月：数学660攻坚 & 概率启动">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="milestone-input-phase">阶段标签：</label>
+                    <input type="text" class="form-input" id="milestone-input-phase" placeholder="例如：强化攻坚期 / 基础收官期">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">重点战略目标清单（每行一条）：</label>
+                    <textarea class="form-textarea" id="milestone-input-goals" rows="6" placeholder="每行输入一个重点目标..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer" style="justify-content: space-between;">
+                <button class="btn btn-ghost" id="btn-delete-milestone" style="color: var(--color-danger); display: none;">
+                    <i class="fa-solid fa-trash"></i> 删除此里程碑
+                </button>
+                <div style="display: flex; gap: 8px;">
+                    <button class="btn btn-ghost" id="btn-cancel-milestone-edit">取消</button>
+                    <button class="btn btn-primary" id="btn-save-milestone"><i class="fa-solid fa-check"></i> 保存里程碑</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 0.3: 休息日切换为学习日选择弹窗 (Rest to Study Choice Modal) -->
+    <div class="modal-overlay" id="modal-rest-to-study" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon"><i class="fa-solid fa-sun" style="color:var(--color-primary);"></i></span>
+                    <h3>休息日切换为学习日</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-rest-to-study">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">
+                    你正在将 <strong id="r2s-target-date-display" style="color:var(--color-primary);">2026-08-16</strong>（原本为休息日）开启为学习日。请选择任务安排方式：
+                </p>
+
+                <div class="r2s-options-group">
+                    <!-- Option 1: 保持空白 -->
+                    <label class="r2s-option-card">
+                        <input type="radio" name="r2s-choice" value="blank" checked>
+                        <div class="r2s-option-content">
+                            <div class="r2s-option-title"><i class="fa-regular fa-file"></i> 保持空白</div>
+                            <div class="r2s-option-desc">将该日设为空白学习日，后续任务排期保持不动，稍后由你自由编辑或指派。</div>
+                        </div>
+                    </label>
+
+                    <!-- Option 2: 自动提前 -->
+                    <label class="r2s-option-card">
+                        <input type="radio" name="r2s-choice" value="forward">
+                        <div class="r2s-option-content">
+                            <div class="r2s-option-title"><i class="fa-solid fa-forward-step"></i> 自动提前后续任务 (提前 1 天)</div>
+                            <div class="r2s-option-desc">将该日期之后的所有已排期任务向前平移 1 个学习日，充实填补今日，并消除后方超期占位！</div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- 提前范围细分 -->
+                <div class="form-group mt-2" id="r2s-scope-group" style="display: none;">
+                    <label class="form-label">选择提前的时段范围：</label>
+                    <div class="slot-radio-group">
+                        <label class="slot-radio-option">
+                            <input type="radio" name="r2s-scope" value="all" checked>
+                            <span><i class="fa-regular fa-calendar-check"></i> 全天所有时段 (上午 + 下午 + 晚上)</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="r2s-scope" value="morning">
+                            <span><i class="fa-regular fa-sun" style="color:#f59e0b;"></i> 仅提前上午任务</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="r2s-scope" value="afternoon">
+                            <span><i class="fa-solid fa-sun" style="color:#ea580c;"></i> 仅提前下午任务</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="r2s-scope" value="evening">
+                            <span><i class="fa-solid fa-moon" style="color:#6366f1;"></i> 仅提前晚上任务</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-rest-to-study">取消</button>
+                <button class="btn btn-primary" id="btn-confirm-rest-to-study"><i class="fa-solid fa-check"></i> 确认切换</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 0.4: 学习日切换为休息日选择弹窗 (Study to Rest Choice Modal) -->
+    <div class="modal-overlay" id="modal-study-to-rest" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon"><i class="fa-solid fa-mug-hot" style="color:var(--color-warning);"></i></span>
+                    <h3>将学习日设为休息日</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-study-to-rest">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">
+                    你正在将 <strong id="s2r-target-date-display" style="color:var(--color-primary);">2026-09-05</strong> 切换为休息日。请选择如何处理该日及后续的复习任务：
+                </p>
+
+                <div class="r2s-options-group">
+                    <!-- Option 1: 自动顺延 -->
+                    <label class="r2s-option-card">
+                        <input type="radio" name="s2r-choice" value="shift" checked>
+                        <div class="r2s-option-content">
+                            <div class="r2s-option-title"><i class="fa-solid fa-bolt"></i> 自动向后顺延（推荐）</div>
+                            <div class="r2s-option-desc">将今日的所有任务及后续已排期任务依次向后平移 1 个学习日（跳过休息日），今日腾出为休息日，原定任务不丢失！</div>
+                        </div>
+                    </label>
+
+                    <!-- Option 2: 仅设为休息日 -->
+                    <label class="r2s-option-card">
+                        <input type="radio" name="s2r-choice" value="keep">
+                        <div class="r2s-option-content">
+                            <div class="r2s-option-title"><i class="fa-solid fa-mug-hot"></i> 仅设为休息日 (不顺延后续)</div>
+                            <div class="r2s-option-desc">直接将今日转为休息日，后续日期排期保持不动。</div>
+                        </div>
+                    </label>
+                </div>
+
+                <!-- 顺延范围细分 -->
+                <div class="form-group mt-2" id="s2r-scope-group">
+                    <label class="form-label">选择顺延的时段范围：</label>
+                    <div class="slot-radio-group">
+                        <label class="slot-radio-option">
+                            <input type="radio" name="s2r-scope" value="all" checked>
+                            <span><i class="fa-regular fa-calendar-check"></i> 全天所有时段 (上午 + 下午 + 晚上)</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="s2r-scope" value="morning">
+                            <span><i class="fa-regular fa-sun" style="color:#f59e0b;"></i> 仅顺延上午任务</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="s2r-scope" value="afternoon">
+                            <span><i class="fa-solid fa-sun" style="color:#ea580c;"></i> 仅顺延下午任务</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="s2r-scope" value="evening">
+                            <span><i class="fa-solid fa-moon" style="color:#6366f1;"></i> 仅顺延晚上任务</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-study-to-rest">取消</button>
+                <button class="btn btn-primary" id="btn-confirm-study-to-rest"><i class="fa-solid fa-check"></i> 确认切换</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 1: 智能顺延排期 (Smart Shift Modal) -->
+    <div class="modal-overlay" id="modal-shift" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon"><i class="fa-solid fa-bolt" style="color:var(--color-warning);"></i></span>
+                    <h3>智能顺延排期</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-shift">✕</button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-desc">
+                    当因临时调休或进度落后时，将指定日期及之后的所有学习日程向后平移。超出 12.20 初试日期的任务将生成红色超期占位。
+                </p>
+
+                <div class="form-group">
+                    <label class="form-label" for="shift-from-date">从哪个日期开始顺延：</label>
+                    <input type="date" class="form-input" id="shift-from-date" min="2026-08-16" max="2026-12-20" value="2026-08-20">
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="shift-days-count">向后顺延天数：</label>
+                    <div class="number-stepper">
+                        <button class="btn-step" id="btn-shift-dec">-</button>
+                        <input type="number" class="form-input text-center" id="shift-days-count" min="1" max="14" value="1">
+                        <button class="btn-step" id="btn-shift-inc">+</button>
+                    </div>
+                </div>
+
+                <!-- 顺延时段范围选择 -->
+                <div class="form-group">
+                    <label class="form-label">顺延时段范围：</label>
+                    <div class="slot-radio-group">
+                        <label class="slot-radio-option">
+                            <input type="radio" name="shift-scope" value="all" checked>
+                            <span><i class="fa-regular fa-calendar-check"></i> 全天顺延 (上午 + 下午 + 晚上)</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="shift-scope" value="morning">
+                            <span><i class="fa-regular fa-sun" style="color:#f59e0b;"></i> 单独顺延上午任务</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="shift-scope" value="afternoon">
+                            <span><i class="fa-solid fa-sun" style="color:#ea580c;"></i> 单独顺延下午任务</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="shift-scope" value="evening">
+                            <span><i class="fa-solid fa-moon" style="color:#6366f1;"></i> 单独顺延晚上任务</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="shift-skip-rest" checked>
+                        <span>遇休息日自动跳过（保持周日休息日不变，仅顺延学习日任务序列）</span>
+                    </label>
+                </div>
+
+                <div class="shift-preview-box" id="shift-preview-box">
+                    <span class="preview-title"><i class="fa-solid fa-eye"></i> 顺延效果预览：</span>
+                    <p id="shift-preview-text">选择参数后将在此展示平移前后对照...</p>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-shift">取消</button>
+                <button class="btn btn-primary" id="btn-confirm-shift"><i class="fa-solid fa-bolt"></i> 确认执行顺延</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 2: 规律排期向导 (Habit Batch Fill Wizard Modal) -->
+    <div class="modal-overlay" id="modal-batch-fill" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon"><i class="fa-solid fa-wand-magic-sparkles" style="color:var(--color-accent);"></i></span>
+                    <h3>规律排期向导</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-batch">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="form-group">
+                    <label class="form-label">快速填充专属习惯：</label>
+                    <div class="cascade-radio-chips" style="flex-wrap: wrap;">
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.applyHabitPreset('eng_reading')"><i class="fa-solid fa-book-open"></i> 英语真题阅读 (9-10月每2-3天)</button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.applyHabitPreset('eng_obj')"><i class="fa-solid fa-pen-ruler"></i> 英语客观题全真 (11-12月每周1次)</button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.applyHabitPreset('eng_writing')"><i class="fa-solid fa-feather-pointed"></i> 英语作文练习 (11-12月每2-3天)</button>
+                        <button type="button" class="btn btn-xs btn-outline" onclick="window.applyHabitPreset('comm_night')"><i class="fa-solid fa-tower-broadcast"></i> 通原晚间视频 (每晚3-4集)</button>
+                    </div>
+                </div>
+
+                <div class="form-row" style="display: flex; gap: 10px;">
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label" for="batch-start-date">起始日期：</label>
+                        <input type="date" class="form-input" id="batch-start-date" min="2026-08-16" max="2026-12-20" value="2026-09-01">
+                    </div>
+                    <div class="form-group" style="flex: 1;">
+                        <label class="form-label" for="batch-end-date">截止日期：</label>
+                        <input type="date" class="form-input" id="batch-end-date" min="2026-08-16" max="2026-12-20" value="2026-10-31">
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">频率与周期：</label>
+                    <select class="form-input" id="batch-interval">
+                        <option value="1">每天</option>
+                        <option value="2" selected>每 2 天一次</option>
+                        <option value="3">每 3 天一次</option>
+                        <option value="7">每周一次 (如周六/周日)</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">填充时段：</label>
+                    <div class="slot-radio-group">
+                        <label class="slot-radio-option">
+                            <input type="radio" name="batch-slot" value="morning">
+                            <span><i class="fa-regular fa-sun" style="color:#f59e0b;"></i> 上午</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="batch-slot" value="afternoon" checked>
+                            <span><i class="fa-solid fa-sun" style="color:#ea580c;"></i> 下午</span>
+                        </label>
+                        <label class="slot-radio-option">
+                            <input type="radio" name="batch-slot" value="evening">
+                            <span><i class="fa-solid fa-moon" style="color:#6366f1;"></i> 晚上</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="batch-subject">所属学科：</label>
+                    <select class="form-input" id="batch-subject">
+                        <option value="english">英语一</option>
+                        <option value="major">专业课 · 通信原理</option>
+                        <option value="math">数学一</option>
+                        <option value="politics">思想政治</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label" for="batch-text">计划内容：</label>
+                    <input type="text" class="form-input" id="batch-text" placeholder="例如：英语真题单篇阅读精读与长难句剖析" value="英语真题单篇阅读精读与长难句剖析">
+                </div>
+
+                <div class="form-group checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="batch-skip-rest" checked>
+                        <span>自动跳过休息日（不覆盖休息日）</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-batch">取消</button>
+                <button class="btn btn-primary" id="btn-confirm-batch"><i class="fa-solid fa-wand-magic-sparkles"></i> 确认批量填充</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 5: 导入 / 导出 JSON (Backup Modal) -->
+    <div class="modal-overlay" id="modal-backup" aria-hidden="true">
+        <div class="modal-card">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon"><i class="fa-solid fa-floppy-disk" style="color:var(--color-primary);"></i></span>
+                    <h3 id="backup-modal-title">数据备份与恢复</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-backup">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="export-section">
+                    <p class="modal-desc">
+                        将当前全部复习日程、宏观阶段进度、自定义题库预设及任务池数据导出为 JSON 文件，随时备份与存档。
+                    </p>
+                    <button class="btn btn-accent btn-block" id="btn-download-json-file">
+                        <i class="fa-solid fa-download"></i>
+                        <span>下载备份文件 (27kaoyan_plan.json)</span>
+                    </button>
+                    <div class="form-group mt-3">
+                        <label class="form-label">或复制 JSON 文本：</label>
+                        <textarea class="form-textarea json-textarea" id="export-json-text" readonly rows="5"></textarea>
+                    </div>
+                </div>
+
+                <div id="import-section" style="display:none;">
+                    <!-- Overwrite Warning Banner -->
+                    <div style="background:rgba(239, 68, 68, 0.07); border:1px solid rgba(239, 68, 68, 0.25); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:12px;">
+                        <div style="color:var(--color-danger); font-weight:700; font-size:12.5px; display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                            <i class="fa-solid fa-triangle-exclamation"></i>
+                            <span>导入其他数据将覆盖现有规划区所有数据！确定要继续吗？</span>
+                        </div>
+                        <div style="color:var(--text-secondary); font-size:11.5px; line-height:1.45; margin-left:20px;">
+                            💡 <strong>提示</strong>：如需保留当前规划区，您可以点击顶部规划区下拉菜单中的 <span style="color:var(--color-primary); font-weight:600;">「导入规划数据作为新规划区...」</span>。
+                        </div>
+                    </div>
+
+                    <p class="modal-desc" style="font-size:12px; margin-bottom:8px;">
+                        选择本地 JSON 备份文件，或直接粘贴 JSON 文本恢复复习规划数据：
+                    </p>
+                    <div class="file-dropzone" id="file-dropzone">
+                        <input type="file" id="input-import-file" accept=".json" style="display:none;">
+                        <button class="btn btn-outline" id="btn-browse-file"><i class="fa-solid fa-folder-open"></i> 选择 JSON 文件</button>
+                        <span class="dropzone-text">或将 JSON 文件拖入此处</span>
+                    </div>
+                    <div class="form-group mt-3">
+                        <label class="form-label">或粘贴 JSON 代码：</label>
+                        <textarea class="form-textarea json-textarea" id="import-json-text" placeholder="在此粘贴导出的 JSON 数据..." rows="4"></textarea>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-backup">关闭</button>
+                <button class="btn btn-primary" id="btn-confirm-import" style="display:none;"><i class="fa-solid fa-check"></i> 确认恢复数据</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ==========================================================================
+         Full-Screen Onboarding Multi-Step Wizard (全屏多步沉浸式引导向导)
+         ========================================================================== -->
+    <div class="onboarding-fullscreen-overlay" id="onboarding-fullscreen-overlay" style="display: none;" aria-hidden="true">
+        <!-- Top Bar: Traffic Light Space, Centered Brand Logo & Close Button -->
+        <div class="onboarding-top-bar">
+            <div class="onboarding-top-space" style="width: 80px; flex-shrink: 0;"></div>
+            <div class="onboarding-brand-logo">
+                <i class="fa-solid fa-graduation-cap"></i>
+                <span>KaoyanFlow</span>
+            </div>
+            <div class="onboarding-top-action" style="width: 80px; display: flex; justify-content: flex-end; flex-shrink: 0;">
+                <button type="button" class="onboarding-exit-btn" id="btn-exit-onboarding" title="取消并退出向导" style="display: none;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Center Content: Step Carousel Panes -->
+        <div class="onboarding-main-container">
+            <!-- Step: 欢迎页 (Welcome - 首次启动专属) -->
+            <div class="onboarding-step-pane" id="onboarding-pane-welcome" data-step-key="welcome">
+                <div class="onboarding-welcome-hero">
+                    <div class="onboarding-welcome-badge">
+                        <i class="fa-solid fa-wand-magic-sparkles"></i>
+                        <span>全流程科学考研规划系统</span>
+                    </div>
+                    <div class="onboarding-welcome-icon-box">
+                        <i class="fa-solid fa-graduation-cap"></i>
+                    </div>
+                    <h1 class="onboarding-welcome-title">欢迎使用 KaoyanFlow</h1>
+                    <p class="onboarding-welcome-desc">
+                        这是一个一站式考研全流程排期与宏观攻坚空间。接下来只需简单 1 分钟完成个性化设置，即可为你自动生成全周期动态日程与题库知识库。
+                    </p>
+                    <div class="onboarding-welcome-features">
+                        <div class="feature-item"><i class="fa-solid fa-calendar-check"></i> 每日日程排期</div>
+                        <div class="feature-item"><i class="fa-solid fa-chart-pie"></i> 学科宏观看板</div>
+                        <div class="feature-item"><i class="fa-solid fa-bolt"></i> 智能顺延引擎</div>
+                        <div class="feature-item"><i class="fa-solid fa-bullseye"></i> 目标分数指引</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step: 界面外观设置 (Theme - 前置第一步，实时生效，可跳过) -->
+            <div class="onboarding-step-pane" id="onboarding-pane-theme" data-step-key="theme">
+                <div class="onboarding-pane-header">
+                    <h2>界面外观风格 (可选)</h2>
+                    <p>选择你喜好的视觉主题（点击即可实时预览，后续可在右上角随时切换）</p>
+                </div>
+                <div class="onboarding-pane-form" style="max-width: 560px; margin: 0 auto; width: 100%;">
+                    <div class="onboarding-theme-grid" style="margin-top: 10px;">
+                        <div class="onb-theme-card" data-theme-choice="light">
+                            <div class="onb-theme-card-preview theme-preview-light">
+                                <i class="fa-solid fa-sun"></i>
+                            </div>
+                            <div class="onb-theme-card-title">保持浅色</div>
+                            <div class="onb-theme-card-desc">明亮清爽</div>
+                        </div>
+                        <div class="onb-theme-card selected" data-theme-choice="system">
+                            <div class="onb-theme-card-preview theme-preview-system">
+                                <i class="fa-solid fa-circle-half-stroke"></i>
+                            </div>
+                            <div class="onb-theme-card-title">跟随系统</div>
+                            <div class="onb-theme-card-desc">自动适应 (默认)</div>
+                        </div>
+                        <div class="onb-theme-card" data-theme-choice="dark">
+                            <div class="onb-theme-card-preview theme-preview-dark">
+                                <i class="fa-solid fa-moon"></i>
+                            </div>
+                            <div class="onb-theme-card-title">保持深色</div>
+                            <div class="onb-theme-card-desc">专注护眼</div>
+                        </div>
+                    </div>
+
+                    <!-- 主题色调选项 -->
+                    <div class="onb-accent-section">
+                        <label class="form-label" style="font-size: 12.5px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-palette" style="color: var(--color-primary);"></i> 主题色调设置
+                        </label>
+                        <div class="onb-accent-swatches-grid" id="onb-accent-swatches-grid">
+                            <div class="onb-accent-swatch selected" data-accent-val="blue">
+                                <div class="onb-accent-color-circle" style="background: #2563eb;"></div>
+                                <span class="onb-accent-name">深邃蓝</span>
+                            </div>
+                            <div class="onb-accent-swatch" data-accent-val="green">
+                                <div class="onb-accent-color-circle" style="background: #059669;"></div>
+                                <span class="onb-accent-name">翡翠绿</span>
+                            </div>
+                            <div class="onb-accent-swatch" data-accent-val="purple">
+                                <div class="onb-accent-color-circle" style="background: #7c3aed;"></div>
+                                <span class="onb-accent-name">紫罗兰</span>
+                            </div>
+                            <div class="onb-accent-swatch" data-accent-val="amber">
+                                <div class="onb-accent-color-circle" style="background: #d97706;"></div>
+                                <span class="onb-accent-name">琥珀金</span>
+                            </div>
+                            <div class="onb-accent-swatch" data-accent-val="rose">
+                                <div class="onb-accent-color-circle" style="background: #e11d48;"></div>
+                                <span class="onb-accent-name">玫瑰红</span>
+                            </div>
+                            <div class="onb-accent-swatch" data-accent-val="cyan">
+                                <div class="onb-accent-color-circle" style="background: #0891b2;"></div>
+                                <span class="onb-accent-name">青空蓝</span>
+                            </div>
+                            <div class="onb-accent-swatch" data-accent-val="orange">
+                                <div class="onb-accent-color-circle" style="background: #ea580c;"></div>
+                                <span class="onb-accent-name">活力橙</span>
+                            </div>
+                            <div class="onb-accent-swatch" data-accent-val="slate">
+                                <div class="onb-accent-color-circle" style="background: #475569;"></div>
+                                <span class="onb-accent-name">极客灰</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 深色模式深度选项 (仅在选择跟随系统或保持深色时展示) -->
+                    <div class="onb-dark-depth-section" id="onb-dark-depth-container">
+                        <label class="form-label" style="font-size: 12.5px; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+                            <i class="fa-solid fa-circle-half-stroke" style="color: var(--color-primary);"></i> 深色模式深度 (OLED / HDR 适配)
+                        </label>
+                        <div class="onb-dark-depth-grid" id="onb-dark-depth-grid">
+                            <div class="onb-dark-depth-card selected" data-depth="classic">
+                                <div class="onb-dark-depth-icon"><i class="fa-solid fa-moon"></i></div>
+                                <div>
+                                    <div class="onb-dark-depth-title">深灰夜间 (Dark Slate)</div>
+                                    <div class="onb-dark-depth-desc">柔和护眼，适合大多数 LCD 屏幕</div>
+                                </div>
+                            </div>
+                            <div class="onb-dark-depth-card" data-depth="pure-black">
+                                <div class="onb-dark-depth-icon"><i class="fa-solid fa-sun-plant-wilt"></i></div>
+                                <div>
+                                    <div class="onb-dark-depth-title">极致纯黑 (True Black / OLED)</div>
+                                    <div class="onb-dark-depth-desc">0 亮度全黑背景，专为 HDR / OLED 打造</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step: 基础信息与届数 (Basic Info & Target Year) -->
+            <div class="onboarding-step-pane" id="onboarding-pane-basic" data-step-key="basic">
+                <div class="onboarding-pane-header">
+                    <h2>设定备战身份与规划区</h2>
+                    <p>为你的考研规划区命名，系统将以此为你定制时间轴与备考倒计时</p>
+                </div>
+                <div class="onboarding-pane-form" style="max-width: 460px; margin: 0 auto; width: 100%;">
+                    <div class="form-group" id="group-onb-user-name">
+                        <label class="form-label" for="onb-user-name">你的称呼 / 昵称：<span style="color:var(--color-danger);">*</span></label>
+                        <input type="text" class="form-input form-input-lg" id="onb-user-name" placeholder="请输入你的称呼 / 昵称（必填）" maxlength="20">
+                        <span class="form-hint" id="hint-onb-user-name" style="color:var(--text-muted); font-size:11px;">此称呼将用于规划区标题与问候语</span>
+                    </div>
+                    <div class="form-group" id="group-onb-ws-name" style="margin-top:16px;">
+                        <label class="form-label" for="onb-ws-name">规划区全称：<span style="color:var(--color-danger);">*</span></label>
+                        <input type="text" class="form-input form-input-lg" id="onb-ws-name" placeholder="如：我的27考研规划（输入昵称后自动生成）" maxlength="30">
+                        <span class="form-hint" id="hint-onb-ws-name" style="color:var(--text-muted); font-size:11px;">规划区名称不能与已有规划区重复</span>
+                    </div>
+                    <div class="form-group" style="margin-top:16px;">
+                        <label class="form-label" for="onb-target-year">目标考研届数：</label>
+                        <select class="form-input form-input-lg" id="onb-target-year">
+                            <option value="26">26 届 (2025 年 12 月初试)</option>
+                            <option value="27" selected>27 届 (2026 年 12 月初试)</option>
+                            <option value="28">28 届 (2027 年 12 月初试)</option>
+                            <option value="29">29 届 (2028 年 12 月初试)</option>
+                            <option value="30">30 届 (2029 年 12 月初试)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step: 起止与初试日期 (Dates) -->
+            <div class="onboarding-step-pane" id="onboarding-pane-dates" data-step-key="dates">
+                <div class="onboarding-pane-header">
+                    <h2>规划起止与初试倒计时</h2>
+                    <p>设定你开始复习的日期与预计初试日期，系统将自动划分阶段与天数</p>
+                </div>
+                <div class="onboarding-pane-form" style="max-width: 460px; margin: 0 auto; width: 100%;">
+                    <div class="form-group" id="group-onb-start-date">
+                        <label class="form-label" for="onb-start-date">规划起始日期：<span style="color:var(--color-danger);">*</span></label>
+                        <input type="date" class="form-input form-input-lg" id="onb-start-date">
+                        <span class="form-hint" id="hint-onb-start-date" style="color:var(--text-muted); font-size:11px;">默认为今天或支持提前至前一年开始准备</span>
+                    </div>
+                    <div class="form-group" id="group-onb-exam-date" style="margin-top:16px;">
+                        <label class="form-label" for="onb-exam-date">初试目标日期：<span style="color:var(--color-danger);">*</span></label>
+                        <input type="date" class="form-input form-input-lg" id="onb-exam-date">
+                        <span class="form-hint" id="hint-onb-exam-date" style="color:var(--text-muted); font-size:11px;">考研初试通常在 12 月倒数第一或第二个周末</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step: 备考休息日配置 (Rest Days - 不可跳过) -->
+            <div class="onboarding-step-pane" id="onboarding-pane-rest-days" data-step-key="rest-days">
+                <div class="onboarding-pane-header">
+                    <h2>设定备考休息日</h2>
+                    <p>科学合理的休息是长期高效攻坚的保障，请选择适合你的复习节奏</p>
+                </div>
+                <div class="onboarding-pane-form" style="max-width: 480px; margin: 0 auto; width: 100%;">
+                    <!-- 3-Choice Mode Cards -->
+                    <div class="onb-rest-mode-selector" id="onb-rest-mode-selector">
+                        <div class="onb-rest-mode-card selected" data-rest-mode="weekly">
+                            <div class="onb-rest-mode-icon"><i class="fa-solid fa-calendar-week"></i></div>
+                            <div class="onb-rest-mode-title">每周休息</div>
+                            <div class="onb-rest-mode-desc">按星期循环休息</div>
+                        </div>
+                        <div class="onb-rest-mode-card" data-rest-mode="interval">
+                            <div class="onb-rest-mode-icon"><i class="fa-solid fa-arrows-rotate"></i></div>
+                            <div class="onb-rest-mode-title">每隔几天休息</div>
+                            <div class="onb-rest-mode-desc">固定周期轮休</div>
+                        </div>
+                        <div class="onb-rest-mode-card" data-rest-mode="none">
+                            <div class="onb-rest-mode-icon"><i class="fa-solid fa-fire-flame-curved"></i></div>
+                            <div class="onb-rest-mode-title">不休息</div>
+                            <div class="onb-rest-mode-desc">全年无休冲刺</div>
+                        </div>
+                    </div>
+
+                    <!-- Panel 1: 每周休息 (周日到周六 7个可点击框子) -->
+                    <div class="onb-rest-subpanel active" id="onb-rest-panel-weekly">
+                        <label class="form-label" style="font-size:12px; margin-bottom:8px; display:block;">点击选择每周需要休息的日子（可多选）：</label>
+                        <div class="onb-weekday-pill-bar" id="onb-weekday-pill-bar">
+                            <button type="button" class="onb-weekday-box selected" data-day="0">周日</button>
+                            <button type="button" class="onb-weekday-box" data-day="1">周一</button>
+                            <button type="button" class="onb-weekday-box" data-day="2">周二</button>
+                            <button type="button" class="onb-weekday-box" data-day="3">周三</button>
+                            <button type="button" class="onb-weekday-box" data-day="4">周四</button>
+                            <button type="button" class="onb-weekday-box" data-day="5">周五</button>
+                            <button type="button" class="onb-weekday-box" data-day="6">周六</button>
+                        </div>
+                        <div class="onb-rest-hint" id="onb-weekly-hint" style="margin-top:12px; font-size:11.5px; color:var(--color-primary); font-weight:500;">
+                            💡 已设定：每周日例行休息，其余日子为学习日
+                        </div>
+                    </div>
+
+                    <!-- Panel 2: 每隔几天休息 (1-30下拉框) -->
+                    <div class="onb-rest-subpanel" id="onb-rest-panel-interval" style="display:none;">
+                        <label class="form-label" for="onb-rest-interval-select" style="font-size:12px; margin-bottom:8px; display:block;">选择轮休间隔频率：</label>
+                        <select class="form-input form-input-lg" id="onb-rest-interval-select">
+                            <!-- Populated dynamically: 1 to 30 -->
+                        </select>
+                        <div class="onb-rest-hint" id="onb-interval-hint" style="margin-top:12px; font-size:11.5px; color:var(--color-primary); font-weight:500;">
+                            💡 系统将从规划起始日起，每学习指定天数后自动安排 1 天例行休息
+                        </div>
+                    </div>
+
+                    <!-- Panel 3: 不休息 (神人。) -->
+                    <div class="onb-rest-subpanel" id="onb-rest-panel-none" style="display:none;">
+                        <div class="onb-god-mode-box">
+                            <div class="onb-god-mode-icon"><i class="fa-solid fa-bolt-lightning"></i></div>
+                            <div class="onb-god-mode-title">神人。</div>
+                            <div class="onb-god-mode-desc">全年无休，全力冲刺！请注意合理分配精力，保持健康与高效。</div>
+                        </div>
+                    </div>
+
+                    <!-- 设定每日学习时段 (可勾选上午/下午/晚上，默认三个都勾选) -->
+                    <div class="onb-slots-section" style="margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--border-color);">
+                        <label class="form-label" style="font-size: 12.5px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; justify-content: space-between;">
+                            <span style="display: flex; align-items: center; gap: 6px;">
+                                <i class="fa-solid fa-clock" style="color: var(--color-primary);"></i> 设定每日学习时段
+                            </span>
+                            <span style="font-size: 11px; color: var(--text-muted); font-weight: normal;">(默认全选，可按需勾选)</span>
+                        </label>
+                        <div class="onb-slot-pills-container" id="onb-slot-pills-container">
+                            <label class="onb-slot-checkbox-card selected" data-slot="morning">
+                                <input type="checkbox" id="onb-chk-slot-morning" value="morning" checked style="display:none;">
+                                <div class="slot-card-icon"><i class="fa-solid fa-sun" style="color:#f59e0b;"></i></div>
+                                <div class="slot-card-title">上午</div>
+                                <div class="slot-card-chk-indicator"><i class="fa-solid fa-check"></i></div>
+                            </label>
+                            <label class="onb-slot-checkbox-card selected" data-slot="afternoon">
+                                <input type="checkbox" id="onb-chk-slot-afternoon" value="afternoon" checked style="display:none;">
+                                <div class="slot-card-icon"><i class="fa-solid fa-cloud-sun" style="color:#3b82f6;"></i></div>
+                                <div class="slot-card-title">下午</div>
+                                <div class="slot-card-chk-indicator"><i class="fa-solid fa-check"></i></div>
+                            </label>
+                            <label class="onb-slot-checkbox-card selected" data-slot="evening">
+                                <input type="checkbox" id="onb-chk-slot-evening" value="evening" checked style="display:none;">
+                                <div class="slot-card-icon"><i class="fa-solid fa-moon" style="color:#8b5cf6;"></i></div>
+                                <div class="slot-card-title">晚上</div>
+                                <div class="slot-card-chk-indicator"><i class="fa-solid fa-check"></i></div>
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step: 考研科目定制 (Subjects) -->
+            <div class="onboarding-step-pane" id="onboarding-pane-subjects" data-step-key="subjects">
+                <div class="onboarding-pane-header">
+                    <h2>考研科目架构定制</h2>
+                    <p>根据你的目标报考专业，选择公共课与专业课门类</p>
+                </div>
+                <div class="onboarding-pane-form" style="max-width: 520px; margin: 0 auto; width: 100%;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                        <div class="form-group">
+                            <label class="form-label" for="onb-subject-math">数学科目：</label>
+                            <select class="form-input" id="onb-subject-math">
+                                <option value="math1" selected>数学一 (高数+线代+概率)</option>
+                                <option value="math2">数学二 (高数+线代)</option>
+                                <option value="math3">数学三 (微积分+线代+概率)</option>
+                                <option value="none">不考数学 (改考双专业课/其他)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="onb-subject-english">英语科目：</label>
+                            <select class="form-input" id="onb-subject-english">
+                                <option value="english1" selected>英语一 (学硕为主)</option>
+                                <option value="english2">英语二 (专硕为主)</option>
+                                <option value="japanese">日语 203</option>
+                                <option value="russian">俄语 202</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:14px;">
+                        <div class="form-group" id="group-onb-subject-major1">
+                            <label class="form-label" for="onb-subject-major1">专业课一名称：<span style="color:var(--color-danger);">*</span></label>
+                            <input type="text" class="form-input" id="onb-subject-major1" placeholder="如：信号与系统" value="" maxlength="20">
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="onb-subject-politics">政治科目：</label>
+                            <input type="text" class="form-input" id="onb-subject-politics" value="思想政治理论" readonly style="background:var(--bg-subtle);">
+                        </div>
+                    </div>
+
+                    <!-- Additional Dynamic Major Subjects Container -->
+                    <div id="onb-additional-majors" style="display:flex; flex-direction:column; gap:12px; margin-top:12px;"></div>
+
+                    <div style="margin-top:14px;">
+                        <button type="button" class="btn btn-secondary btn-sm" id="btn-add-onb-major-field" style="font-size:12px; padding:6px 14px; border-radius:var(--radius-sm); cursor:pointer;">
+                            <i class="fa-solid fa-plus" style="margin-right:4px;"></i> 添加专业课 (最多4门)
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step: 目标分数设定 (Target Scores - 可跳过) -->
+            <div class="onboarding-step-pane" id="onboarding-pane-target-scores" data-step-key="target-scores">
+                <div class="onboarding-pane-header">
+                    <h2>设定目标分数 (可选)</h2>
+                    <p>设定各科目标分数以量化复习预期（可跳过，后续在底部随时修改）</p>
+                </div>
+                <div class="onboarding-pane-form" style="max-width: 480px; margin: 0 auto; width: 100%;">
+                    <div class="onb-target-scores-grid" id="onb-target-scores-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+                        <!-- Dynamically populated according to selected subjects -->
+                    </div>
+                    <div style="background:var(--bg-subtle); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px 16px; display:flex; align-items:center; justify-content:space-between;">
+                        <span style="font-size:12px; color:var(--text-secondary); font-weight:600;">目标总分：</span>
+                        <div style="display:flex; align-items:baseline; gap:4px;">
+                            <span id="onb-target-total-display" style="font-size:22px; font-weight:800; font-family:var(--font-mono); color:var(--color-primary);">0</span>
+                            <span style="font-size:12px; color:var(--text-muted);">分</span>
+                        </div>
+                    </div>
+                    <div class="form-group checkbox-group" style="margin-top:12px;">
+                        <label class="checkbox-label" style="font-size:12px; cursor:pointer;">
+                            <input type="checkbox" id="onb-chk-show-footer" checked>
+                            <span>在 App 底部状态栏常驻显示目标分数</span>
+                        </label>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step: 庆祝与加载开启 (Celebration & Transition) -->
+            <div class="onboarding-step-pane" id="onboarding-pane-celebrate" data-step-key="celebrate">
+                <div class="onboarding-celebrate-container">
+                    <div class="onboarding-celebrate-icon-box">
+                        <i class="fa-solid fa-award"></i>
+                    </div>
+                    <h1 class="onboarding-celebrate-title">🎉 设置全部完成！</h1>
+                    <p class="onboarding-celebrate-subtitle">现在开启你的考研备战之旅，愿每一份坚持终得硕果。</p>
+                    <div class="onboarding-loading-ring">
+                        <svg viewBox="0 0 50 50" class="spinner-svg">
+                            <circle class="path" cx="25" cy="25" r="20" fill="none" stroke-width="4"></circle>
+                        </svg>
+                        <span class="loading-text">正在初始化规划空间...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Bar: Prev on Left, Step Indicator above Progress Bar in Center, Skip & Next on Right -->
+        <div class="onboarding-bottom-bar" id="onboarding-bottom-bar">
+            <div class="onboarding-bottom-left" style="display: flex; align-items: center; gap: 8px;">
+                <button type="button" class="btn btn-ghost" id="btn-onb-prev" style="display: none;">
+                    <i class="fa-solid fa-chevron-left"></i> 上一步
+                </button>
+                <button type="button" class="btn btn-ghost" id="btn-onb-open-sample" style="color: var(--color-primary); font-weight: 600; font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px;">
+                    <i class="fa-solid fa-wand-magic-sparkles" style="color: #f59e0b;"></i> 打开样板规划区
+                </button>
+            </div>
+            <div class="onboarding-bottom-center">
+                <span class="onboarding-step-indicator" id="onb-step-indicator">第 1 / 5 步</span>
+                <div class="onboarding-progress-track">
+                    <div class="onboarding-progress-fill" id="onb-progress-fill" style="width: 20%;"></div>
+                </div>
+            </div>
+            <div class="onboarding-bottom-right">
+                <button type="button" class="btn btn-ghost btn-skip" id="btn-onb-skip" style="display: none; color: var(--text-muted);">
+                    跳过
+                </button>
+                <button type="button" class="btn btn-primary" id="btn-onb-next">
+                    <span id="btn-onb-next-text">下一步</span> <i class="fa-solid fa-chevron-right" id="btn-onb-next-icon"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: 考研目标分数设定 (Target Score Modal) -->
+    <div class="modal-overlay" id="modal-target-score" aria-hidden="true">
+        <div class="modal-card" style="max-width: 480px;">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <div class="brand-icon-box" style="width:24px; height:24px; background:rgba(239, 68, 68, 0.1); color:var(--color-danger);">
+                        <i class="fa-solid fa-bullseye" style="font-size:12px;"></i>
+                    </div>
+                    <h3>考研目标分数设定</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-target-score">✕</button>
+            </div>
+            <div class="modal-body" style="padding: 16px 20px;">
+                <!-- 样板间只读提示横幅 -->
+                <div id="target-score-readonly-banner" class="modal-readonly-banner" style="display:none;">
+                    <i class="fa-solid fa-lock" style="margin-right:6px;"></i> 样板间示范数据仅供查看，所有字段已锁定不可编辑
+                </div>
+
+                <p class="modal-desc" style="font-size:12px; margin-bottom:12px;">
+                    清晰明确的分数预期是上岸的第一步。设定各科目标分数，实时总分联动，指引复习攻坚方向：
+                </p>
+
+                <div class="target-score-inputs-grid" id="target-score-inputs-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+                    <!-- Dynamically populated based on active workspace subjects -->
+                </div>
+
+                <!-- Total Score Summary Banner -->
+                <div style="background:var(--bg-subtle); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px 14px; display:flex; align-items:center; justify-content:space-between; margin-bottom:12px;">
+                    <span style="font-size:12px; color:var(--text-secondary); font-weight:600;">目标总分：</span>
+                    <div style="display:flex; align-items:baseline; gap:4px;">
+                        <span id="target-score-total-val" style="font-size:20px; font-weight:800; font-family:var(--font-mono); color:var(--color-primary);">0</span>
+                        <span style="font-size:12px; color:var(--text-muted);">分</span>
+                    </div>
+                </div>
+
+                <!-- Show in App Footer Checkbox -->
+                <div class="form-group checkbox-group" style="margin:0; padding-top:2px;">
+                    <label class="checkbox-label" style="font-size:12px; cursor:pointer;">
+                        <input type="checkbox" id="chk-show-target-score-footer" checked>
+                        <span>在 App 底部状态栏显示目标分数</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-clear-target-score" style="margin-right:auto; color:var(--text-muted);">清空目标</button>
+                <button class="btn btn-ghost" id="btn-cancel-target-score">取消</button>
+                <button class="btn btn-primary" id="btn-save-target-score"><i class="fa-solid fa-check"></i> 保存目标分数</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: 导入规划数据作为新规划区 (Import as New Workspace Modal) -->
+    <div class="modal-overlay" id="modal-import-new-workspace" aria-hidden="true">
+        <div class="modal-card" style="max-width: 520px;">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <div class="brand-icon-box" style="width:24px; height:24px; background:var(--color-primary-bg); color:var(--color-primary);">
+                        <i class="fa-solid fa-file-import" style="font-size:12px;"></i>
+                    </div>
+                    <h3>导入规划数据作为新规划区</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-import-new-ws">✕</button>
+            </div>
+            <div class="modal-body" style="padding: 16px 20px;">
+                <!-- Hidden file input for this workflow -->
+                <input type="file" id="input-import-new-ws-file" accept=".json" style="display:none;">
+
+                <!-- Parsed summary preview box -->
+                <div id="import-new-ws-summary" style="background:var(--bg-subtle); border:1px solid var(--border-color); border-radius:var(--radius-sm); padding:10px 14px; margin-bottom:14px; font-size:12px; line-height:1.5;">
+                    <div style="font-weight:600; color:var(--color-success); display:flex; align-items:center; gap:6px; margin-bottom:4px;">
+                        <i class="fa-solid fa-circle-check"></i>
+                        <span>已成功解析规划备份数据</span>
+                    </div>
+                    <div id="import-new-ws-details" style="color:var(--text-secondary); font-size:11.5px;">
+                        正在读取文件信息...
+                    </div>
+                </div>
+
+                <!-- Workspace Name Input -->
+                <div class="form-group">
+                    <label class="form-label" for="input-import-new-ws-name">新规划区显示全称：<span style="color:var(--color-danger);">*</span></label>
+                    <input type="text" class="form-input" id="input-import-new-ws-name" maxlength="30" placeholder="如：FEEFEENOON的27考研规划">
+                    <span class="form-hint" id="import-new-ws-name-hint" style="font-size:11px; color:var(--text-muted);">规划区名称必须唯一，如已存在同名将提示修改</span>
+                </div>
+
+                <!-- User Nickname Input -->
+                <div class="form-group">
+                    <label class="form-label" for="input-import-new-ws-user">称呼 / 昵称：</label>
+                    <input type="text" class="form-input" id="input-import-new-ws-user" maxlength="20" placeholder="如：考研人">
+                </div>
+
+                <!-- Date Range Info Preview -->
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+                    <div class="form-group">
+                        <label class="form-label" style="font-size:11.5px;">规划起始日期：</label>
+                        <input type="text" class="form-input" id="input-import-new-ws-start" readonly style="background:var(--bg-subtle); color:var(--text-secondary); cursor:not-allowed; font-size:12px;">
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" style="font-size:11.5px;">初试目标日期：</label>
+                        <input type="text" class="form-input" id="input-import-new-ws-exam" readonly style="background:var(--bg-subtle); color:var(--text-secondary); cursor:not-allowed; font-size:12px;">
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-import-new-ws">取消</button>
+                <button class="btn btn-primary" id="btn-confirm-import-new-ws"><i class="fa-solid fa-check"></i> 确定创建并切换</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 7: 规划区全局设置面板 (Dedicated Workspace Settings Modal) -->
+    <div class="modal-overlay" id="modal-workspace-settings" aria-hidden="true">
+        <div class="modal-card" style="max-width: 680px;">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <i class="fa-solid fa-sliders" style="color:var(--color-primary); font-size:18px;"></i>
+                    <h3>规划区全局设置</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-settings">✕</button>
+            </div>
+            <div class="modal-body" style="padding: 16px 20px;">
+                <!-- 样板间只读提示横幅 -->
+                <div id="settings-readonly-banner" class="modal-readonly-banner" style="display:none;">
+                    <i class="fa-solid fa-lock" style="margin-right:6px;"></i> 样板间示范数据仅供查看，所有字段已锁定不可编辑
+                </div>
+
+                <div class="settings-modal-layout">
+                    <!-- Sidebar Nav -->
+                    <div class="settings-sidebar-nav">
+                        <button type="button" class="settings-nav-btn active" data-pane="pane-basic" onclick="window.switchSettingsPane('pane-basic')">
+                            <i class="fa-solid fa-user-pen"></i>
+                            <span>基本信息</span>
+                        </button>
+                        <button type="button" class="settings-nav-btn" data-pane="pane-dates" onclick="window.switchSettingsPane('pane-dates')">
+                            <i class="fa-solid fa-calendar-days"></i>
+                            <span>起止日期</span>
+                        </button>
+                        <button type="button" class="settings-nav-btn" data-pane="pane-display" onclick="window.switchSettingsPane('pane-display')">
+                            <i class="fa-solid fa-palette"></i>
+                            <span>显示偏好</span>
+                        </button>
+                        <button type="button" class="settings-nav-btn" data-pane="pane-manage" onclick="window.switchSettingsPane('pane-manage')">
+                            <i class="fa-solid fa-hard-drive"></i>
+                            <span>数据管理</span>
+                        </button>
+                        <button type="button" class="settings-nav-btn" data-pane="pane-ai" onclick="window.switchSettingsPane('pane-ai')">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i>
+                            <span>AI接入 (开发中)</span>
+                        </button>
+                        <button type="button" class="settings-nav-btn" data-pane="pane-about" onclick="window.switchSettingsPane('pane-about')">
+                            <i class="fa-solid fa-circle-info"></i>
+                            <span>关于</span>
+                        </button>
+                    </div>
+
+                    <!-- Content Area -->
+                    <div class="settings-content-area">
+                        <!-- Pane 1: 基本信息 -->
+                        <div class="settings-section-pane active" id="pane-basic">
+                            <div class="settings-card-group">
+                                <div class="settings-card-title"><i class="fa-solid fa-id-badge" style="margin-right:5px;"></i> 规划区与用户标识</div>
+                                <div class="form-group">
+                                    <label class="form-label" for="settings-user-name">称呼 / 昵称：</label>
+                                    <input type="text" class="form-input" id="settings-user-name" maxlength="20">
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="settings-workspace-name">规划区显示全称：</label>
+                                    <input type="text" class="form-input" id="settings-workspace-name" maxlength="30">
+                                </div>
+                            </div>
+
+                            <div class="settings-card-group">
+                                <div class="settings-card-title"><i class="fa-solid fa-graduation-cap" style="margin-right:5px;"></i> 目标考研届数变更</div>
+                                <div class="form-group">
+                                    <label class="form-label" for="settings-target-year">考研届数：</label>
+                                    <select class="form-input" id="settings-target-year">
+                                        <option value="26">26 届 (2025 年初试)</option>
+                                        <option value="27">27 届 (2026 年初试)</option>
+                                        <option value="28">28 届 (2027 年初试)</option>
+                                        <option value="29">29 届 (2028 年初试)</option>
+                                        <option value="30">30 届 (2029 年初试)</option>
+                                    </select>
+                                    <span class="form-hint" style="font-size:11px; color:var(--color-danger);"><i class="fa-solid fa-triangle-exclamation"></i> 警告：修改考研届数将批量重映射所有排期的公历年份，请谨慎操作。</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pane 2: 起止日期管理 -->
+                        <div class="settings-section-pane" id="pane-dates">
+                            <div class="settings-card-group">
+                                <div class="settings-card-title"><i class="fa-solid fa-calendar-days" style="margin-right:5px;"></i> 日期范围变更</div>
+                                <div class="form-group">
+                                    <label class="form-label" for="settings-start-date">规划起始日期：</label>
+                                    <input type="date" class="form-input" id="settings-start-date">
+                                    <span class="form-hint" id="settings-start-hint" style="font-size:10.5px; color:var(--text-muted);">修改起始日将按所选策略重新安排排期</span>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label" for="settings-exam-date">考研初试目标日期：</label>
+                                    <input type="date" class="form-input" id="settings-exam-date">
+                                    <span class="form-hint" id="settings-exam-hint" style="font-size:10.5px; color:var(--text-muted);">考研初试通常在 12 月倒数第一或第二个周末</span>
+                                </div>
+                            </div>
+
+                            <div class="settings-card-group">
+                                <div class="settings-card-title"><i class="fa-solid fa-gears" style="margin-right:5px;"></i> 起始日期变更迁移策略</div>
+                                <div class="form-group">
+                                    <label class="slot-radio-option" style="margin-bottom:6px;">
+                                        <input type="radio" name="settings-shift-strategy" value="keep" checked>
+                                        <span>保持现有排期不变（仅增减起始日前后的空白日期）</span>
+                                    </label>
+                                    <label class="slot-radio-option" style="margin-bottom:6px;">
+                                        <input type="radio" name="settings-shift-strategy" value="shift">
+                                        <span>将现有所有任务平移至新起始日（顺延/提前任务起点）</span>
+                                    </label>
+                                    <label class="slot-radio-option">
+                                        <input type="radio" name="settings-shift-strategy" value="reset">
+                                        <span>清空现有安排，重新生成空白日程骨架</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pane 3: 显示偏好 -->
+                        <div class="settings-section-pane" id="pane-display">
+                            <div class="settings-card-group">
+                                <div class="settings-card-title"><i class="fa-solid fa-palette" style="margin-right:5px;"></i> 本规划区专属外观风格</div>
+                                <div class="form-group">
+                                    <label class="form-label">深浅主题模式：</label>
+                                    <div class="theme-segmented-control" id="settings-theme-segmented">
+                                        <button type="button" class="theme-seg-btn" data-theme-choice="light"><i class="fa-solid fa-sun"></i> 浅色</button>
+                                        <button type="button" class="theme-seg-btn active" data-theme-choice="system"><i class="fa-solid fa-circle-half-stroke"></i> 跟随系统</button>
+                                        <button type="button" class="theme-seg-btn" data-theme-choice="dark"><i class="fa-solid fa-moon"></i> 深色</button>
+                                    </div>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">主题色彩：</label>
+                                    <div class="onb-accent-swatches-grid" id="settings-accent-swatches-grid" style="grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 6px;">
+                                        <div class="onb-accent-swatch selected" data-accent-val="blue">
+                                            <div class="onb-accent-color-circle" style="background: #2563eb;"></div>
+                                            <span class="onb-accent-name">深邃蓝</span>
+                                        </div>
+                                        <div class="onb-accent-swatch" data-accent-val="green">
+                                            <div class="onb-accent-color-circle" style="background: #059669;"></div>
+                                            <span class="onb-accent-name">翡翠绿</span>
+                                        </div>
+                                        <div class="onb-accent-swatch" data-accent-val="purple">
+                                            <div class="onb-accent-color-circle" style="background: #7c3aed;"></div>
+                                            <span class="onb-accent-name">紫罗兰</span>
+                                        </div>
+                                        <div class="onb-accent-swatch" data-accent-val="amber">
+                                            <div class="onb-accent-color-circle" style="background: #d97706;"></div>
+                                            <span class="onb-accent-name">琥珀金</span>
+                                        </div>
+                                        <div class="onb-accent-swatch" data-accent-val="rose">
+                                            <div class="onb-accent-color-circle" style="background: #e11d48;"></div>
+                                            <span class="onb-accent-name">玫瑰红</span>
+                                        </div>
+                                        <div class="onb-accent-swatch" data-accent-val="cyan">
+                                            <div class="onb-accent-color-circle" style="background: #0891b2;"></div>
+                                            <span class="onb-accent-name">青空蓝</span>
+                                        </div>
+                                        <div class="onb-accent-swatch" data-accent-val="orange">
+                                            <div class="onb-accent-color-circle" style="background: #ea580c;"></div>
+                                            <span class="onb-accent-name">活力橙</span>
+                                        </div>
+                                        <div class="onb-accent-swatch" data-accent-val="slate">
+                                            <div class="onb-accent-color-circle" style="background: #475569;"></div>
+                                            <span class="onb-accent-name">极客灰</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="form-group" id="settings-dark-depth-container">
+                                    <label class="form-label">深色模式深度：</label>
+                                    <div style="display:flex; gap:10px; margin-top:4px;">
+                                        <div class="onb-dark-depth-card selected" id="settings-depth-classic" data-depth="classic" style="flex:1; cursor:pointer;">
+                                            <div style="font-weight:700; font-size:12px; margin-bottom:2px;">经典深灰</div>
+                                            <div style="font-size:10.5px; color:var(--text-muted);">柔和护眼层次</div>
+                                        </div>
+                                        <div class="onb-dark-depth-card" id="settings-depth-pure" data-depth="pure-black" style="flex:1; cursor:pointer;">
+                                            <div style="font-weight:700; font-size:12px; margin-bottom:2px;">极致纯黑</div>
+                                            <div style="font-size:10.5px; color:var(--text-muted);">OLED / HDR 0 亮度黑</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="settings-card-group">
+                                <div class="settings-card-title"><i class="fa-solid fa-table-list" style="margin-right:5px;"></i> 视图与交互偏好</div>
+                                <div class="form-group">
+                                    <label class="form-label" for="settings-default-view">默认视图模式：</label>
+                                    <select class="form-input" id="settings-default-view">
+                                        <option value="table">紧凑表格视图</option>
+                                        <option value="week">周历大网格视图</option>
+                                        <option value="month">月度日历方格视图</option>
+                                    </select>
+                                </div>
+                                <div class="form-group checkbox-group">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="settings-show-past-days">
+                                        <span>默认显示今天之前的过去日期</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pane 4: 数据与工作区管理 -->
+                        <div class="settings-section-pane" id="pane-manage">
+                            <!-- Electron 本地持久化与文件目录卡片 (桌面端特有) -->
+                            <div class="settings-card-group" id="electron-storage-card" style="display:none; background:var(--color-primary-bg); border:1px solid var(--border-focus);">
+                                <div class="settings-card-title" style="color:var(--color-primary);">
+                                    <i class="fa-solid fa-hard-drive" style="margin-right:5px;"></i>
+                                    本地文件存储状态 (Electron Desktop)
+                                </div>
+                                <p style="font-size:11.5px; color:var(--text-secondary); margin-bottom:8px; line-height:1.5;">
+                                    当前系统运行于独立桌面客户端，所有规划数据直接持久化保存在本地文件系统中，自动生成每日滚动备份。
+                                </p>
+                                <div style="background:var(--bg-main); padding:8px 10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); font-family:monospace; font-size:10.5px; word-break:break-all; margin-bottom:10px; color:var(--text-main);" id="electron-storage-path-display">
+                                    读取中...
+                                </div>
+                                <div style="display:flex; gap:8px;">
+                                    <button type="button" class="btn btn-sm btn-primary" id="btn-open-local-data-folder">
+                                        <i class="fa-regular fa-folder-open"></i> 打开数据存储目录
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="settings-card-group">
+                                <div class="settings-card-title"><i class="fa-solid fa-floppy-disk" style="margin-right:5px;"></i> 当前规划区数据备份与导出</div>
+                                <p style="font-size:12px; color:var(--text-secondary); line-height:1.6; margin-bottom:10px;">
+                                    将当前规划区的所有日程、题库章节、个性化学科与里程碑导出为独立 JSON 文件。
+                                </p>
+                                <div style="display:flex; gap:8px;">
+                                    <button type="button" class="btn btn-secondary btn-sm" id="btn-settings-export-json">
+                                        <i class="fa-solid fa-download"></i> 导出当前规划区备份 (.json)
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="settings-card-group" style="border:1px dashed var(--color-danger); background:var(--bg-subtle);">
+                                <div class="settings-card-title" style="color:var(--color-danger);"><i class="fa-solid fa-triangle-exclamation" style="margin-right:5px;"></i> 危险操作区域</div>
+                                <div style="display:flex; flex-direction:column; gap:10px;">
+                                    <div style="display:flex; align-items:center; justify-content:space-between;">
+                                        <div>
+                                            <div style="font-weight:600; font-size:12px;">清空当前日程任务</div>
+                                            <div style="font-size:11px; color:var(--text-muted);">仅清空日程表内所有任务，保留题库预设与学科架构</div>
+                                        </div>
+                                        <button type="button" class="btn btn-outline btn-sm" id="btn-settings-clear-schedule" style="color:var(--color-danger); border-color:var(--color-danger);">
+                                            <i class="fa-solid fa-trash"></i> 清空日程
+                                        </button>
+                                    </div>
+                                    <hr style="border:none; border-top:1px solid var(--border-color); margin:2px 0;">
+                                    <div style="display:flex; align-items:center; justify-content:space-between;">
+                                        <div>
+                                            <div style="font-weight:600; font-size:12px; color:var(--color-danger);">删除当前考研规划区</div>
+                                            <div style="font-size:11px; color:var(--text-muted);">彻底删除此规划区，至少需保留一个规划区</div>
+                                        </div>
+                                        <button type="button" class="btn btn-danger btn-sm" id="btn-settings-delete-workspace">
+                                            <i class="fa-solid fa-trash-can"></i> 删除此规划区
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pane: AI接入 (开发中) -->
+                        <div class="settings-section-pane" id="pane-ai">
+                            <div class="settings-card-group">
+                                <div class="settings-card-title">
+                                    <i class="fa-solid fa-brain" style="margin-right:5px; color:var(--color-primary);"></i>
+                                    大语言模型 API 接入配置
+                                    <span class="badge badge-indigo" style="font-size:10px; margin-left:6px; font-weight:normal;">开发中</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="settings-ai-provider">模型服务商 (Provider)：</label>
+                                    <select class="form-input" id="settings-ai-provider">
+                                        <option value="openai">OpenAI / 兼容 OpenAI 格式 (如 DeepSeek, Moonshot, Qwen)</option>
+                                        <option value="anthropic">Anthropic Claude</option>
+                                        <option value="gemini">Google Gemini</option>
+                                        <option value="custom">自定义中转 API</option>
+                                    </select>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="settings-ai-base-url">API Base URL：</label>
+                                    <input type="text" class="form-input" id="settings-ai-base-url" placeholder="https://api.openai.com/v1">
+                                    <span class="form-hint" style="font-size:10.5px; color:var(--text-muted);">自定义中转或代理地址，官方直连留空或填官方默认 URL</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="settings-ai-api-key">API Key：</label>
+                                    <div style="position:relative; display:flex; align-items:center;">
+                                        <input type="password" class="form-input" id="settings-ai-api-key" placeholder="sk-..." style="padding-right:32px; width:100%;">
+                                        <button type="button" class="btn btn-ghost btn-xs" id="btn-toggle-apikey-visibility" style="position:absolute; right:6px; height:24px; padding:0 6px; color:var(--text-muted);" title="显示/隐藏 API Key">
+                                            <i class="fa-regular fa-eye" id="icon-toggle-apikey"></i>
+                                        </button>
+                                    </div>
+                                    <span class="form-hint" style="font-size:10.5px; color:var(--text-muted);">Key 仅保存于您本地浏览器的 localStorage 中，绝不上传任何第三方服务器。</span>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label" for="settings-ai-model">模型名称 (Model)：</label>
+                                    <input type="text" class="form-input" id="settings-ai-model" placeholder="如：gpt-4o / deepseek-chat / claude-3-7-sonnet">
+                                </div>
+                            </div>
+
+                            <div class="settings-card-group">
+                                <div class="settings-card-title"><i class="fa-solid fa-wand-magic-sparkles" style="margin-right:5px;"></i> AI 智能化规划能力（规划预留）</div>
+                                <p style="font-size:12px; color:var(--text-secondary); line-height:1.6; margin-bottom:10px;">
+                                    系统正在开发以下 AI 深度赋能模块，后续版本配置上述 API Key 后即可一键解锁：
+                                </p>
+                                <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:8px;">
+                                    <div style="background:var(--bg-subtle); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); font-size:11.5px;">
+                                        <strong style="color:var(--text-main); display:flex; align-items:center; gap:5px; margin-bottom:3px;"><i class="fa-solid fa-wand-magic" style="color:var(--color-primary);"></i> 智能排期助理</strong>
+                                        <span style="color:var(--text-muted);">根据考研目标与当前月份，一键自动批量排布每日任务条目。</span>
+                                    </div>
+                                    <div style="background:var(--bg-subtle); padding:10px; border-radius:var(--radius-sm); border:1px solid var(--border-color); font-size:11.5px;">
+                                        <strong style="color:var(--text-main); display:flex; align-items:center; gap:5px; margin-bottom:3px;"><i class="fa-solid fa-chart-line" style="color:var(--color-success);"></i> 宏观进度诊断</strong>
+                                        <span style="color:var(--text-muted);">自动分析各科复习短板与收官延期风险，输出个性化冲刺建议。</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Pane 5: 关于 KaoyanFlow -->
+                        <div class="settings-section-pane" id="pane-about">
+                            <div class="settings-about-container">
+                                <div class="about-hero-header">
+                                    <div class="about-app-icon-box">
+                                        <i class="fa-solid fa-graduation-cap"></i>
+                                    </div>
+                                    <div class="about-app-title-group">
+                                        <div class="about-app-name-row">
+                                            <span class="about-app-name">KaoyanFlow</span>
+                                            <span class="badge badge-primary">v1.0.0</span>
+                                        </div>
+                                        <div class="about-app-tagline">现代化、任务驱动型考研备考排期与宏观攻坚系统</div>
+                                    </div>
+                                </div>
+
+                                <div class="settings-card-group about-author-card">
+                                    <div class="settings-card-title"><i class="fa-solid fa-user-tie" style="margin-right:5px;"></i> 关于作者</div>
+                                    <div class="about-author-row">
+                                        <div class="about-avatar-box">
+                                            <img src="assets/avatar.png" alt="luanyufei" class="about-avatar-img" onerror="if(window.AUTHOR_AVATAR_DATA && this.src!==window.AUTHOR_AVATAR_DATA){this.src=window.AUTHOR_AVATAR_DATA;}else{this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">
+                                            <div class="about-avatar-placeholder" style="display:none;">
+                                                <i class="fa-solid fa-user-astronaut"></i>
+                                            </div>
+                                        </div>
+                                        <div class="about-author-meta">
+                                            <div class="about-author-name" id="about-author-nickname">FEEFEENOON</div>
+                                            <a class="about-github-link" href="https://github.com/luanyufei" target="_blank" rel="noopener noreferrer" title="访问开发者 GitHub 主页">
+                                                <i class="fa-brands fa-github"></i>
+                                                <span>github.com/luanyufei</span>
+                                                <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px;"></i>
+                                            </a>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="settings-card-group about-update-card">
+                                    <div class="settings-card-title"><i class="fa-solid fa-cloud-arrow-down" style="margin-right:5px;"></i> 软件版本与检查更新</div>
+                                    <div class="about-update-action-row">
+                                        <div class="about-update-info">
+                                            <span class="about-update-status" id="about-update-status-text"><i class="fa-solid fa-circle-check" style="color:var(--color-success); margin-right:4px;"></i>当前已是最新版本 (v1.0.0)</span>
+                                        </div>
+                                        <button type="button" class="btn btn-secondary btn-sm" id="btn-check-app-update">
+                                            <i class="fa-solid fa-arrows-rotate"></i> 检查更新
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div class="settings-card-group about-license-card">
+                                    <div class="settings-card-title"><i class="fa-solid fa-scale-balanced" style="margin-right:5px;"></i> 开源协议与版权声明</div>
+                                    <div class="about-license-content">
+                                        <div class="license-badge-row">
+                                            <span class="badge badge-primary"><i class="fa-solid fa-certificate"></i> MIT License</span>
+                                            <span class="badge badge-rose" style="background:var(--color-politics-bg); color:var(--color-politics-text); border:1px solid var(--color-politics-border);"><i class="fa-solid fa-ban"></i> 未经授权禁止商用</span>
+                                        </div>
+                                        <p class="license-text">
+                                            Copyright &copy; 2026 <strong>luanyufei</strong>. 本项目基于 MIT 协议完全开源，免费供考研学子个人学习与复习规划使用。未经原作者书面授权，严禁任何机构或个人将本项目全部或部分源码用于商业营利、课程捆绑或二次闭源转售。
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-settings">取消</button>
+                <button class="btn btn-primary" id="btn-save-settings"><i class="fa-solid fa-check"></i> 保存设置并应用</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal 8: 考研科目与学科管理弹窗 (Subject Management Modal) -->
+    <div class="modal-overlay" id="modal-manage-subjects" aria-hidden="true">
+        <div class="modal-card modal-card-wide" style="max-width: 680px;">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <span class="modal-icon"><i class="fa-solid fa-graduation-cap"></i></span>
+                    <h3>考研科目与学科管理</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-manage-subjects">✕</button>
+            </div>
+            <div class="modal-body" style="max-height: 520px; overflow-y: auto;">
+                <p class="modal-desc">
+                    在此管理当前规划区的考研科目，支持修改名称、新增专业课，或按学科一键清空对应排期任务。
+                </p>
+
+                <!-- 样板间只读提示横幅 -->
+                <div id="manage-subjects-readonly-banner" class="modal-readonly-banner" style="display: none;">
+                    <i class="fa-solid fa-lock" style="margin-right:6px;"></i> 样板间示范数据仅供查看，所有字段已锁定不可编辑
+                </div>
+
+                <div class="manage-subjects-list" id="manage-subjects-list">
+                    <!-- Populated dynamically by app.js -->
+                </div>
+
+                <div class="add-major-bar mt-3" style="display: flex; align-items: center; justify-content: space-between; padding: 12px; background: var(--bg-card-alt); border-radius: var(--radius-md); border: 1px dashed var(--border-color);">
+                    <div>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-add-major-subject">
+                            <i class="fa-solid fa-circle-plus"></i>
+                            <span>+ 新增专业课 (如双专业课)</span>
+                        </button>
+                    </div>
+                    <span style="font-size:11px; color:var(--text-muted);">注：公共课（数/英/政）固定各一门，专业课可自主添加多门。</span>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" id="btn-cancel-manage-subjects">取消</button>
+                <button class="btn btn-primary" id="btn-save-manage-subjects"><i class="fa-solid fa-check"></i> 保存学科配置</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal: 规划区回收站 (Trash Bin Modal) -->
+    <div class="modal-overlay" id="modal-trash-bin" aria-hidden="true">
+        <div class="modal-card" style="max-width: 520px;">
+            <div class="modal-header">
+                <div class="modal-title-row">
+                    <div class="brand-icon-box" style="width:26px; height:26px; background:rgba(239, 68, 68, 0.1); color:var(--color-danger);">
+                        <i class="fa-solid fa-trash-can" style="font-size:13px;"></i>
+                    </div>
+                    <h3>规划区回收站 (垃圾桶)</h3>
+                </div>
+                <button class="btn-close-modal" id="btn-close-trash-bin">✕</button>
+            </div>
+            <div class="modal-body" style="padding: 16px 20px;">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+                    <span style="font-size: 12px; color: var(--text-muted);">
+                        💡 被删除的规划区可在此恢复，7 天内未恢复将自动彻底清除。
+                    </span>
+                    <button type="button" class="btn btn-xs btn-ghost" id="btn-clear-trash-bin" style="color: var(--color-danger); font-size: 11.5px;">
+                        <i class="fa-solid fa-trash"></i> 清空回收站
+                    </button>
+                </div>
+                <div class="trash-list-container" id="trash-list-container">
+                    <!-- Dynamically populated by app.js -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" id="btn-close-trash-bin-footer">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Status Bar (VSCode / Modern Desktop Style) -->
+    <footer class="app-status-bar" id="app-status-bar">
+        <div class="status-bar-left">
+            <div class="status-countdown-item" id="exam-countdown-display" title="考研初试倒计时">
+                <i class="fa-solid fa-flag-checkered status-icon-flag"></i>
+                <span class="status-label" id="pill-exam-countdown-label">距 12.20 初试</span>
+                <span class="status-days-val" id="countdown-days">--</span>
+                <span class="status-unit">天</span>
+            </div>
+            <div class="status-bar-divider"></div>
+            <div class="status-active-milestones" id="dynamic-active-milestones">
+                <!-- Dynamically rendered by app.js based on active uncompleted modules -->
+            </div>
+        </div>
+
+        <!-- Center Target Score Banner (目标分数展示/添加快捷入口) -->
+        <div class="status-bar-center" id="status-bar-center">
+            <button type="button" class="status-target-score-btn" id="btn-status-target-score" title="点击设定考研目标分数">
+                <span class="target-score-empty"><i class="fa-solid fa-pen"></i> 添加目标分数...</span>
+            </button>
+        </div>
+
+        <div class="status-bar-right">
+            <div class="status-save-indicator saved" id="status-save-indicator">
+                <i class="fa-solid fa-check" id="status-save-icon"></i>
+                <span id="status-save-text">已自动保存</span>
+            </div>
+            <div class="status-bar-divider"></div>
+            <div class="status-version-tag">
+                <i class="fa-solid fa-code-branch" style="font-size:10px; margin-right:3px;"></i>
+                <span>KaoyanFlow v1.0.0</span>
+            </div>
+        </div>
+    </footer>
+
+    <!-- Scripts -->
+    <script src="assets/avatar.js"></script>
+    <script src="data-init.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

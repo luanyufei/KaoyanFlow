@@ -1,0 +1,55 @@
+{
+  "name": "kaoyanflow",
+  "productName": "KaoyanFlow",
+  "version": "1.0.0",
+  "description": "现代化任务驱动型考研备考系统",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "pack": "electron-builder --dir"
+  },
+  "keywords": [
+    "kaoyan",
+    "study-planner",
+    "electron"
+  ],
+  "author": "luanyufei",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.luanyufei.kaoyanflow",
+    "productName": "KaoyanFlow",
+    "mac": {
+      "category": "public.app-category.education",
+      "identity": null,
+      "target": [
+        "dir"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "index.html",
+      "style.css",
+      "data-init.js",
+      "app.js",
+      "assets/**/*",
+      "vendor/**/*",
+      "package.json"
+    ]
+  }
+}
