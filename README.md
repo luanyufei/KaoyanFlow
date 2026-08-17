@@ -18,6 +18,7 @@
   <a href="#概述">概述</a> •
   <a href="#功能特性">功能特性</a> •
   <a href="#系统支持">系统支持</a> •
+  <a href="#安装方法">安装方法</a> •
   <a href="#快速开始">快速开始</a> •
   <a href="#本地打包">本地打包</a> •
   <a href="#项目结构">项目结构</a> •
@@ -82,6 +83,24 @@ KaoyanFlow 是一个本地运行的考研备考排期与进度管理桌面应用
 > **说明**：
 > - macOS 安装包原生适配 Apple Silicon（M 系列芯片）；
 > - Windows 安装程序内置适配 x64（Intel/AMD）与 arm64（高通骁龙/ARM 设备），安装时将自动识别并部署对应架构程序。
+
+---
+
+## 安装方法
+
+直接前往 [GitHub Releases 最新发布页](https://github.com/luanyufei/KaoyanFlow/releases/latest) 下载对应系统的安装包：
+
+### macOS (Apple Silicon)
+1. 下载 `KaoyanFlow-*-arm64.dmg`（或 `.zip` 压缩包）；
+2. 双击打开镜像，将 `KaoyanFlow.app` 拖入 `Applications`（应用程序）文件夹；
+3. 若首次打开提示“已损坏”或“无法验证开发者”，在系统终端中执行如下命令即可正常启动：
+   ```bash
+   xattr -cr /Applications/KaoyanFlow.app
+   ```
+
+### Windows (x64 / arm64)
+1. 下载 `KaoyanFlow Setup *.exe`；
+2. 双击运行安装向导，按提示完成安装即可（安装程序会自动识别并部署适配您设备架构的程序）。
 
 ---
 
