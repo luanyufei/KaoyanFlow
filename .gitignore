@@ -20,7 +20,7 @@ build/
 *.tar.gz
 
 # AI Collaboration & Private Internal Guides (User Excluded)
-AI_README.md
+AGENTS.md
 scratch/
 
 # IDE & Editor Configs
