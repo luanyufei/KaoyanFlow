@@ -9,6 +9,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     saveActiveWorkspaceId: (id) => ipcRenderer.invoke('storage:saveActiveWorkspaceId', id),
     getDataPath: () => ipcRenderer.invoke('storage:getDataPath'),
     openDataFolder: () => ipcRenderer.invoke('shell:openDataFolder'),
+    openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
+    updateTitleBarOverlay: (options) => ipcRenderer.invoke('window:updateTitleBarOverlay', options),
+    saveFile: (options) => ipcRenderer.invoke('dialog:saveFile', options),
     
     // Auto Updater API
     checkForUpdates: () => ipcRenderer.invoke('updater:check'),

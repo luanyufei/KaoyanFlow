@@ -131,6 +131,22 @@
             state.trashWorkspaces = parsed.trashWorkspaces || {};
             state.sampleHidden = !!parsed.sampleHidden;
             state.activeWorkspaceId = parsed.activeWorkspaceId || Object.keys(state.workspaces)[0];
+
+            // 自动无感平滑迁移所有规划区数据至 v1.1.0 (schemaVersion: 2 结构化多任务)
+            if (typeof window.migrateWorkspaceData === 'function') {
+                let migratedAny = false;
+                Object.keys(state.workspaces).forEach(wsId => {
+                    const ws = state.workspaces[wsId];
+                    if (ws && (!ws.schemaVersion || ws.schemaVersion < 2)) {
+                        state.workspaces[wsId] = window.migrateWorkspaceData(ws);
+                        migratedAny = true;
+                    }
+                });
+                if (migratedAny) {
+                    saveWorkspaces();
+                    console.log('[KaoyanFlow] 成功完成旧版规划区数据平滑自动升级至 v1.1.0 结构化存储');
+                }
+            }
         }
 
         // 自动清除超过 7 天的回收站数据
@@ -279,6 +295,13 @@
 
     async function initElectronUI() {
         if (window.electronAPI && window.electronAPI.isElectron) {
+            const isWin = window.electronAPI.platform === 'win32';
+            if (isWin) {
+                document.body.classList.add('platform-win');
+            } else {
+                document.body.classList.add('platform-mac');
+            }
+
             const card = document.getElementById('electron-storage-card');
             const pathDisplay = document.getElementById('electron-storage-path-display');
             if (card) card.style.display = 'block';
@@ -294,6 +317,18 @@
 
             document.getElementById('btn-open-local-data-folder')?.addEventListener('click', () => {
                 window.electronAPI.openDataFolder();
+            });
+
+            // 统一委托所有外部网页链接与邮件在默认浏览器/客户端中打开
+            document.addEventListener('click', (e) => {
+                const targetLink = e.target.closest('a[href^="http://"], a[href^="https://"], a[href^="mailto:"]');
+                if (targetLink) {
+                    const href = targetLink.getAttribute('href');
+                    if (href && window.electronAPI.openExternal) {
+                        e.preventDefault();
+                        window.electronAPI.openExternal(href);
+                    }
+                }
             });
         }
     }
@@ -1098,9 +1133,13 @@
             let dayHadTask = false;
 
             ['morning', 'afternoon', 'evening'].forEach(slotKey => {
-                const slot = day[slotKey];
-                if (slot && slot.text && slot.text.trim()) {
-                    const subKey = slot.subject && stats.subjects[slot.subject] ? slot.subject : (subKeys[0] || 'math');
+                const tasks = window.getSlotTasks ? window.getSlotTasks(day, slotKey) : (Array.isArray(day[slotKey]) ? day[slotKey] : (day[slotKey]?.text ? [day[slotKey]] : []));
+                
+                tasks.forEach(task => {
+                    const taskText = typeof task === 'string' ? task : (task.text || '');
+                    if (!taskText && !task.modId) return;
+
+                    const subKey = (task.subject && stats.subjects[task.subject]) ? task.subject : (subKeys[0] || 'math');
                     const subStat = stats.subjects[subKey];
                     if (!subStat) return;
 
@@ -1121,8 +1160,17 @@
                     if (!subStat.firstDate || dateKey < subStat.firstDate) subStat.firstDate = dateKey;
                     if (!subStat.lastDate || dateKey > subStat.lastDate) subStat.lastDate = dateKey;
 
-                    // 匹配所属板块
-                    const matchedMod = matchTaskToSubmodule(subKey, slot.text, taxonomy);
+                    // 匹配所属板块 (优先直接使用 task.modId)
+                    let matchedMod = null;
+                    if (task.modId && taxonomy && taxonomy[subKey]?.submodules?.[task.modId]) {
+                        matchedMod = {
+                            id: task.modId,
+                            name: taxonomy[subKey].submodules[task.modId].name
+                        };
+                    } else {
+                        matchedMod = matchTaskToSubmodule(subKey, taskText, taxonomy);
+                    }
+
                     if (!subStat.modulesMap[matchedMod.id]) {
                         subStat.modulesMap[matchedMod.id] = {
                             id: matchedMod.id,
@@ -1143,7 +1191,7 @@
 
                     if (dateKey < modStat.startDate) modStat.startDate = dateKey;
                     if (dateKey > modStat.targetDate) modStat.targetDate = dateKey;
-                }
+                });
             });
 
             if (dayHadTask) uniqueStudiedDates.add(dateKey);
@@ -1440,12 +1488,12 @@
             // 4. 关键词搜索
             if (state.searchKeyword) {
                 const kw = state.searchKeyword.toLowerCase();
-                const mText = (plan.morning?.text || '').toLowerCase();
-                const aText = (plan.afternoon?.text || '').toLowerCase();
-                const eText = (plan.evening?.text || '').toLowerCase();
-                const nText = (plan.note || '').toLowerCase();
                 const dText = dateKey.toLowerCase();
-                if (!mText.includes(kw) && !aText.includes(kw) && !eText.includes(kw) && !nText.includes(kw) && !dText.includes(kw)) {
+                const mTasks = window.getSlotTasks ? window.getSlotTasks(plan, 'morning') : [];
+                const aTasks = window.getSlotTasks ? window.getSlotTasks(plan, 'afternoon') : [];
+                const eTasks = window.getSlotTasks ? window.getSlotTasks(plan, 'evening') : [];
+                const allTexts = [...mTasks, ...aTasks, ...eTasks].map(t => (t.text || '').toLowerCase()).join(' ');
+                if (!dText.includes(kw) && !allTexts.includes(kw)) {
                     return false;
                 }
             }
@@ -1605,6 +1653,30 @@
             if (plan.isRest) rowClasses.push('is-rest');
             if (isOverflow) rowClasses.push('is-overflow');
 
+            const renderSlotMarkup = (slotKey, placeholder) => {
+                const tasks = window.getSlotTasks ? window.getSlotTasks(plan, slotKey) : (Array.isArray(plan[slotKey]) ? plan[slotKey] : (plan[slotKey]?.text ? [plan[slotKey]] : []));
+                if (!tasks || tasks.length === 0) {
+                    return `<span class="table-slot-text empty">${escapeHtml(placeholder)}</span>`;
+                }
+                if (tasks.length === 1) {
+                    const t = tasks[0];
+                    return `
+                        <span class="badge ${getSubjectBadgeClass(t.subject)}">${getSubjectLabelShort(t.subject)}</span>
+                        <span class="table-slot-text" title="${escapeHtml(t.text || '')}">${escapeHtml(t.text || '')}</span>
+                    `;
+                }
+                return `
+                    <div class="table-slot-tasks-wrap">
+                        ${tasks.map(t => `
+                            <div class="table-task-entry">
+                                <span class="badge ${getSubjectBadgeClass(t.subject)}">${getSubjectLabelShort(t.subject)}</span>
+                                <span class="table-slot-text" title="${escapeHtml(t.text || '')}">${escapeHtml(t.text || '')}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            };
+
             // 超出 12.20 的超期占位行（不可直接编辑，需在前面提前消除）
             if (isOverflow) {
                 return `
@@ -1620,20 +1692,17 @@
                         </td>
                         <td class="td-slot-cell" style="cursor:not-allowed;" onclick="showToast('超期占位不可直接编辑，请在前面日期执行「提前」消除此占位', 'warning')" title="考后超期占位，不可直接编辑">
                             <div class="table-slot-content">
-                                <span class="badge ${getSubjectBadgeClass(plan.morning?.subject)}">${getSubjectLabelShort(plan.morning?.subject)}</span>
-                                <span class="table-slot-text ${!plan.morning?.text ? 'empty' : ''}">${escapeHtml(plan.morning?.text || '无')}</span>
+                                ${renderSlotMarkup('morning', '无')}
                             </div>
                         </td>
                         <td class="td-slot-cell" style="cursor:not-allowed;" onclick="showToast('超期占位不可直接编辑，请在前面日期执行「提前」消除此占位', 'warning')" title="考后超期占位，不可直接编辑">
                             <div class="table-slot-content">
-                                <span class="badge ${getSubjectBadgeClass(plan.afternoon?.subject)}">${getSubjectLabelShort(plan.afternoon?.subject)}</span>
-                                <span class="table-slot-text ${!plan.afternoon?.text ? 'empty' : ''}">${escapeHtml(plan.afternoon?.text || '无')}</span>
+                                ${renderSlotMarkup('afternoon', '无')}
                             </div>
                         </td>
                         <td class="td-slot-cell" style="cursor:not-allowed;" onclick="showToast('超期占位不可直接编辑，请在前面日期执行「提前」消除此占位', 'warning')" title="考后超期占位，不可直接编辑">
                             <div class="table-slot-content">
-                                <span class="badge ${getSubjectBadgeClass(plan.evening?.subject)}">${getSubjectLabelShort(plan.evening?.subject)}</span>
-                                <span class="table-slot-text ${!plan.evening?.text ? 'empty' : ''}">${escapeHtml(plan.evening?.text || '无')}</span>
+                                ${renderSlotMarkup('evening', '无')}
                             </div>
                         </td>
                         <td class="td-action-cell">
@@ -1660,7 +1729,7 @@
                         </td>
                         <td colspan="3">
                             <div class="table-rest-notice">
-                                ${plan.note ? `<span class="day-note-text"><i class="fa-solid fa-thumbtack"></i> ${escapeHtml(plan.note)}</span>` : ''}
+                                <span class="badge badge-subtle" style="color:var(--text-muted);"><i class="fa-solid fa-mug-hot"></i> 例行休息日</span>
                             </div>
                         </td>
                         <td class="td-action-cell">
@@ -1671,9 +1740,9 @@
                 `;
             }
 
-            const morningOff = plan.morning?.off || (state.preferences?.activeSlots && !state.preferences.activeSlots.includes('morning'));
-            const afternoonOff = plan.afternoon?.off || (state.preferences?.activeSlots && !state.preferences.activeSlots.includes('afternoon'));
-            const eveningOff = plan.evening?.off || (state.preferences?.activeSlots && !state.preferences.activeSlots.includes('evening'));
+            const morningOff = (state.preferences?.activeSlots && !state.preferences.activeSlots.includes('morning'));
+            const afternoonOff = (state.preferences?.activeSlots && !state.preferences.activeSlots.includes('afternoon'));
+            const eveningOff = (state.preferences?.activeSlots && !state.preferences.activeSlots.includes('evening'));
 
             return `
                 <tr class="${rowClasses.join(' ')}" id="card-${dateKey}">
@@ -1693,36 +1762,21 @@
                     <!-- 上午 -->
                     <td class="td-slot-cell" onclick="window.openEditModal('${dateKey}', 'morning')" title="点击打开编辑菜单">
                         <div class="table-slot-content">
-                            <span class="badge ${getSubjectBadgeClass(plan.morning?.subject)}">
-                                ${getSubjectLabelShort(plan.morning?.subject)}
-                            </span>
-                            <span class="table-slot-text ${!plan.morning?.text ? 'empty' : ''}">
-                                ${escapeHtml(plan.morning?.text || (morningOff ? '（未启用此时段）' : '点击编辑上午计划...'))}
-                            </span>
+                            ${renderSlotMarkup('morning', morningOff ? '（未启用此时段）' : '点击安排上午计划...')}
                         </div>
                     </td>
 
                     <!-- 下午 -->
                     <td class="td-slot-cell" onclick="window.openEditModal('${dateKey}', 'afternoon')" title="点击打开编辑菜单">
                         <div class="table-slot-content">
-                            <span class="badge ${getSubjectBadgeClass(plan.afternoon?.subject)}">
-                                ${getSubjectLabelShort(plan.afternoon?.subject)}
-                            </span>
-                            <span class="table-slot-text ${!plan.afternoon?.text ? 'empty' : ''}">
-                                ${escapeHtml(plan.afternoon?.text || (afternoonOff ? '（未启用此时段）' : '点击编辑下午计划...'))}
-                            </span>
+                            ${renderSlotMarkup('afternoon', afternoonOff ? '（未启用此时段）' : '点击安排下午计划...')}
                         </div>
                     </td>
 
                     <!-- 晚上 -->
                     <td class="td-slot-cell" onclick="window.openEditModal('${dateKey}', 'evening')" title="点击打开编辑菜单">
                         <div class="table-slot-content">
-                            <span class="badge ${getSubjectBadgeClass(plan.evening?.subject)}">
-                                ${getSubjectLabelShort(plan.evening?.subject)}
-                            </span>
-                            <span class="table-slot-text ${!plan.evening?.text ? 'empty' : ''}">
-                                ${escapeHtml(plan.evening?.text || (eveningOff ? '（未启用此时段）' : '点击编辑晚上计划...'))}
-                            </span>
+                            ${renderSlotMarkup('evening', eveningOff ? '（未启用此时段）' : '点击安排晚上计划...')}
                         </div>
                     </td>
 
@@ -1798,6 +1852,19 @@
                 if (plan.isRest) cellClasses.push('is-rest');
                 if (isOverflow) cellClasses.push('is-overflow');
 
+                const renderWeekSlot = (slotKey, placeholder) => {
+                    const tasks = window.getSlotTasks ? window.getSlotTasks(plan, slotKey) : (Array.isArray(plan[slotKey]) ? plan[slotKey] : (plan[slotKey]?.text ? [plan[slotKey]] : []));
+                    if (!tasks || tasks.length === 0) {
+                        return `<span style="color:var(--text-muted); font-size:11px;">${escapeHtml(placeholder)}</span>`;
+                    }
+                    return tasks.map(t => `
+                        <div style="display:flex; align-items:center; gap:5px; overflow:hidden; width:100%;">
+                            <span class="tag-dot dot-${t.subject || 'math'}" style="flex-shrink:0;"></span>
+                            <span style="overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(t.text || '')}">${escapeHtml(t.text || '')}</span>
+                        </div>
+                    `).join('');
+                };
+
                 if (isOverflow) {
                     return `
                         <div class="${cellClasses.join(' ')}" id="card-${dateKey}">
@@ -1810,16 +1877,13 @@
                             </div>
                             <div class="week-day-slots" style="cursor:not-allowed;" onclick="showToast('超期占位不可直接编辑，请在前面日期执行「提前」消除此占位', 'warning')">
                                 <div class="week-mini-slot">
-                                    <span class="tag-dot dot-math" style="margin-top:4px;"></span>
-                                    <span>${escapeHtml(plan.morning?.text || '无')}</span>
+                                    ${renderWeekSlot('morning', '无')}
                                 </div>
                                 <div class="week-mini-slot">
-                                    <span class="tag-dot dot-math-video" style="margin-top:4px;"></span>
-                                    <span>${escapeHtml(plan.afternoon?.text || '无')}</span>
+                                    ${renderWeekSlot('afternoon', '无')}
                                 </div>
                                 <div class="week-mini-slot">
-                                    <span class="tag-dot dot-major" style="margin-top:4px;"></span>
-                                    <span>${escapeHtml(plan.evening?.text || '无')}</span>
+                                    ${renderWeekSlot('evening', '无')}
                                 </div>
                             </div>
                             <div style="font-size:10px; color:var(--color-danger); margin-top:2px;"><i class="fa-solid fa-lock"></i> 考后超期占位</div>
@@ -1849,21 +1913,16 @@
                         ` : `
                             <div class="week-day-slots">
                                 <div class="week-mini-slot" onclick="window.openEditModal('${dateKey}', 'morning')" title="点击编辑上午计划">
-                                    <span class="tag-dot dot-math" style="margin-top:4px;"></span>
-                                    <span>${escapeHtml(plan.morning?.text || '上午计划...')}</span>
+                                    ${renderWeekSlot('morning', '上午计划...')}
                                 </div>
                                 <div class="week-mini-slot" onclick="window.openEditModal('${dateKey}', 'afternoon')" title="点击编辑下午计划">
-                                    <span class="tag-dot dot-math-video" style="margin-top:4px;"></span>
-                                    <span>${escapeHtml(plan.afternoon?.text || '下午计划...')}</span>
+                                    ${renderWeekSlot('afternoon', '下午计划...')}
                                 </div>
                                 <div class="week-mini-slot" onclick="window.openEditModal('${dateKey}', 'evening')" title="点击编辑晚上计划">
-                                    <span class="tag-dot dot-major" style="margin-top:4px;"></span>
-                                    <span>${escapeHtml(plan.evening?.text || '晚上计划...')}</span>
+                                    ${renderWeekSlot('evening', '晚上计划...')}
                                 </div>
                             </div>
                         `}
-
-                        ${plan.note ? `<div style="font-size:10px; color:var(--color-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;"><i class="fa-solid fa-thumbtack"></i> ${escapeHtml(plan.note)}</div>` : ''}
                     </div>
                 `;
             }).join('');
@@ -1903,9 +1962,8 @@
             const [yearStr, mNumStr] = mKey.split('-');
             const mNum = parseInt(mNumStr, 10);
 
-            // 第一天的星期偏移 (以周一为第一列: 0=周一, 1=周二, ..., 6=周日)
             const firstDateObj = new Date(dateList[0] + "T00:00:00");
-            const firstDayOfWeek = firstDateObj.getDay(); // 0 is Sun, 1 is Mon...
+            const firstDayOfWeek = firstDateObj.getDay();
             const emptyPrefixCount = (firstDayOfWeek + 6) % 7;
 
             let emptyCellsHtml = '';
@@ -1926,6 +1984,24 @@
                 if (plan.isRest) cellClasses.push('is-rest');
                 if (isOverflow) cellClasses.push('is-overflow');
 
+                const renderMonthSlotRow = (slotKey, slotName) => {
+                    const tasks = window.getSlotTasks ? window.getSlotTasks(plan, slotKey) : (Array.isArray(plan[slotKey]) ? plan[slotKey] : (plan[slotKey]?.text ? [plan[slotKey]] : []));
+                    if (!tasks || tasks.length === 0) {
+                        return `
+                            <div class="month-slot-row empty" onclick="window.openEditModal('${dateKey}', '${slotKey}')" title="${slotName}：未安排">
+                                <span class="month-slot-tag badge-subtle">-</span>
+                                <span class="month-slot-text">点击安排${slotName}...</span>
+                            </div>
+                        `;
+                    }
+                    return tasks.map(t => `
+                        <div class="month-slot-row" onclick="window.openEditModal('${dateKey}', '${slotKey}')" title="${slotName}：${escapeHtml(t.text || '')}">
+                            <span class="month-slot-tag ${getSubjectBadgeClass(t.subject)}">${getSubjectLabelShort(t.subject)}</span>
+                            <span class="month-slot-text">${escapeHtml(t.text || '')}</span>
+                        </div>
+                    `).join('');
+                };
+
                 // 溢出占位处理
                 if (isOverflow) {
                     return `
@@ -1935,9 +2011,9 @@
                                 <span class="badge badge-overflow" style="font-size:8.5px;"><i class="fa-solid fa-triangle-exclamation"></i> 占位</span>
                             </div>
                             <div class="month-day-slots">
-                                <div class="month-slot-row"><span class="month-slot-text">${escapeHtml(plan.morning?.text || '无')}</span></div>
-                                <div class="month-slot-row"><span class="month-slot-text">${escapeHtml(plan.afternoon?.text || '无')}</span></div>
-                                <div class="month-slot-row"><span class="month-slot-text">${escapeHtml(plan.evening?.text || '无')}</span></div>
+                                ${renderMonthSlotRow('morning', '上午')}
+                                ${renderMonthSlotRow('afternoon', '下午')}
+                                ${renderMonthSlotRow('evening', '晚上')}
                             </div>
                             <div class="month-day-footer" style="color:var(--color-danger);"><i class="fa-solid fa-lock"></i> 占位锁定</div>
                         </div>
@@ -1955,7 +2031,7 @@
                                 <span><i class="fa-solid fa-mug-hot"></i> 例行休息日</span>
                             </div>
                             <div class="month-day-footer">
-                                ${plan.note ? `<span style="color:var(--color-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;"><i class="fa-solid fa-thumbtack"></i> ${escapeHtml(plan.note)}</span>` : '<span style="color:var(--text-muted);">劳逸结合</span>'}
+                                <span style="color:var(--text-muted); font-size:10px;">例行休息</span>
                                 <button class="btn btn-xs btn-ghost" style="padding:0 3px; font-size:9.5px;" onclick="event.stopPropagation(); window.openEditModal('${dateKey}', 'morning')"><i class="fa-solid fa-pen-to-square"></i></button>
                             </div>
                         </div>
@@ -1972,24 +2048,12 @@
                             <button class="btn btn-xs btn-ghost" style="padding:0 3px; font-size:10px; height:18px;" onclick="event.stopPropagation(); window.openEditModal('${dateKey}', 'morning')" title="打开全天/时段编辑"><i class="fa-solid fa-pen-to-square"></i></button>
                         </div>
                         <div class="month-day-slots">
-                            <!-- 上午 -->
-                            <div class="month-slot-row ${!plan.morning?.text ? 'empty' : ''}" onclick="window.openEditModal('${dateKey}', 'morning')" title="上午：${escapeHtml(plan.morning?.text || '未安排')}">
-                                <span class="month-slot-tag ${getSubjectBadgeClass(plan.morning?.subject)}">${getSubjectLabelShort(plan.morning?.subject)}</span>
-                                <span class="month-slot-text">${escapeHtml(plan.morning?.text || '点击安排上午...')}</span>
-                            </div>
-                            <!-- 下午 -->
-                            <div class="month-slot-row ${!plan.afternoon?.text ? 'empty' : ''}" onclick="window.openEditModal('${dateKey}', 'afternoon')" title="下午：${escapeHtml(plan.afternoon?.text || '未安排')}">
-                                <span class="month-slot-tag ${getSubjectBadgeClass(plan.afternoon?.subject)}">${getSubjectLabelShort(plan.afternoon?.subject)}</span>
-                                <span class="month-slot-text">${escapeHtml(plan.afternoon?.text || '点击安排下午...')}</span>
-                            </div>
-                            <!-- 晚上 -->
-                            <div class="month-slot-row ${!plan.evening?.text ? 'empty' : ''}" onclick="window.openEditModal('${dateKey}', 'evening')" title="晚上：${escapeHtml(plan.evening?.text || '未安排')}">
-                                <span class="month-slot-tag ${getSubjectBadgeClass(plan.evening?.subject)}">${getSubjectLabelShort(plan.evening?.subject)}</span>
-                                <span class="month-slot-text">${escapeHtml(plan.evening?.text || '点击安排晚上...')}</span>
-                            </div>
+                            ${renderMonthSlotRow('morning', '上午')}
+                            ${renderMonthSlotRow('afternoon', '下午')}
+                            ${renderMonthSlotRow('evening', '晚上')}
                         </div>
                         <div class="month-day-footer">
-                            ${plan.note ? `<span style="color:var(--color-primary); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(plan.note)}"><i class="fa-solid fa-thumbtack"></i> ${escapeHtml(plan.note)}</span>` : `<span style="color:var(--text-muted);">${dateList.indexOf(dateKey) + 1}天</span>`}
+                            <span style="color:var(--text-muted);">${dateList.indexOf(dateKey) + 1}天</span>
                             <button class="btn-rest-toggle" style="padding:0 2px; font-size:9px; border:none; background:transparent;" onclick="event.stopPropagation(); window.toggleDayRest('${dateKey}')" title="设为休息日"><i class="fa-solid fa-mug-hot"></i></button>
                         </div>
                     </div>
@@ -3442,7 +3506,8 @@
         state.pickerTarget.date = dateKey || "2026-08-17";
         state.pickerTarget.slot = slot || "morning";
 
-        document.getElementById('picker-target-date-display').textContent = state.pickerTarget.date;
+        const dateEl = document.getElementById('picker-target-date-display');
+        if (dateEl) dateEl.textContent = state.pickerTarget.date;
 
         // 高亮对应的时段 Tab 按钮
         document.querySelectorAll('#picker-slot-tabs .slot-tab-btn').forEach(btn => {
@@ -3453,51 +3518,73 @@
             }
         });
 
-        // 获取当前时段的任务数据
-        const currentPlan = state.schedule[dateKey];
-        const currentSlotData = currentPlan ? currentPlan[state.pickerTarget.slot] : null;
-        const currentText = (currentSlotData?.text || '').trim();
-        const currentSub = currentSlotData?.subject;
+        // 读取当前时段已有的任务列表
+        const plan = state.schedule[dateKey];
+        const existingTasks = window.getSlotTasks ? window.getSlotTasks(plan, state.pickerTarget.slot) : [];
+        state.pickerState.currentTasks = JSON.parse(JSON.stringify(existingTasks));
+        renderPickerCurrentTasks();
 
-        document.getElementById('picker-final-text').value = currentText;
-
-        // 尝试智能识别
-        const matched = matchTextToTaxonomy(currentText, currentSub);
-
-        if (matched) {
-            setEditMode('mode-preset');
-            applyPickerStateFull(matched.subject, matched.submodule, matched.questionType, matched.preset, currentText);
-        } else {
-            // 根据时段与现有学科智能匹配默认学科
-            let targetSub = (currentSub && currentSub !== 'pending' && state.subjects?.[currentSub]) ? currentSub : null;
-            if (!targetSub) {
-                if (state.pickerTarget.slot === 'evening' && state.subjects?.major) targetSub = 'major';
-                else if (state.subjects?.math) targetSub = 'math';
-                else targetSub = Object.keys(state.subjects || {})[0] || 'math';
-            }
-
-            const taxonomy = state.taxonomy || window.TAXONOMY_TREE || {};
-            const curSubTax = taxonomy[targetSub];
-            let hasAnyPresets = false;
-            let firstSubmod = '';
-
-            const submods = curSubTax?.submodules || {};
-            const modKeys = Object.keys(submods);
-            if (modKeys.length > 0) {
-                hasAnyPresets = true;
-                firstSubmod = modKeys[0];
-            }
-            applyPickerStateFull(targetSub, firstSubmod, 'choice', null, currentText);
-
-            if (!hasAnyPresets && !currentText) {
-                setEditMode('mode-custom');
-            } else {
-                setEditMode('mode-preset');
-            }
+        // 智能匹配默认选中学科
+        let targetSub = (state.pickerState.currentTasks.length > 0 && state.pickerState.currentTasks[0].subject) ? state.pickerState.currentTasks[0].subject : null;
+        if (!targetSub || targetSub === 'pending' || !state.subjects?.[targetSub]) {
+            if (state.pickerTarget.slot === 'evening' && state.subjects?.major) targetSub = 'major';
+            else if (state.subjects?.math) targetSub = 'math';
+            else targetSub = Object.keys(state.subjects || {})[0] || 'math';
         }
+
+        const taxonomy = state.taxonomy || window.TAXONOMY_TREE || {};
+        const curSubTax = taxonomy[targetSub];
+        const submods = curSubTax?.submodules || {};
+        const firstSubmod = Object.keys(submods)[0] || '';
+
+        applyPickerStateFull(targetSub, firstSubmod, 'choice', null);
     }
 
-    function applyPickerStateFull(subjectId, submoduleId, qTypeId, presetVal, customText) {
+    function renderPickerCurrentTasks() {
+        const container = document.getElementById('picker-tasks-container');
+        const countEl = document.getElementById('picker-task-count');
+        const tasks = state.pickerState.currentTasks || [];
+
+        if (countEl) countEl.textContent = tasks.length;
+        if (!container) return;
+
+        const isReadOnly = isCurrentWorkspaceReadOnly();
+
+        if (tasks.length === 0) {
+            container.innerHTML = `
+                <div class="picker-empty-tasks-hint">
+                    <i class="fa-regular fa-calendar-xmark"></i> 本时段暂无任务（保存后将置为空）
+                </div>
+            `;
+            return;
+        }
+
+        container.innerHTML = tasks.map((t, idx) => `
+            <div class="picker-task-item" data-index="${idx}">
+                <div class="picker-task-item-left">
+                    <span class="badge ${getSubjectBadgeClass(t.subject)}">${getSubjectLabelShort(t.subject)}</span>
+                    <span class="picker-task-item-title" title="${escapeHtml(t.text || '')}">${escapeHtml(t.text || '')}</span>
+                </div>
+                ${!isReadOnly ? `
+                    <button type="button" class="btn-remove-picker-task" data-index="${idx}" title="从此时段移除该任务">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                ` : ''}
+            </div>
+        `).join('');
+
+        container.querySelectorAll('.btn-remove-picker-task').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const idx = parseInt(btn.getAttribute('data-index'), 10);
+                if (!isNaN(idx) && idx >= 0 && idx < state.pickerState.currentTasks.length) {
+                    state.pickerState.currentTasks.splice(idx, 1);
+                    renderPickerCurrentTasks();
+                }
+            });
+        });
+    }
+
+    function applyPickerStateFull(subjectId, submoduleId, qTypeId, presetVal) {
         state.pickerState.subject = subjectId;
         state.pickerState.questionType = qTypeId || 'choice';
 
@@ -3507,37 +3594,39 @@
             else chip.classList.remove('active');
         });
 
-        document.getElementById('custom-input-subject').value = subjectId;
-
-        // 2. 更新 Submodules 下拉（全学科统一读取 curSub.submodules）
+        // 2. 更新 Submodules 下拉
         const subSelect = document.getElementById('picker-submodule-select');
-        subSelect.innerHTML = '';
+        if (subSelect) {
+            subSelect.innerHTML = '';
+            const taxonomy = state.taxonomy || window.TAXONOMY_TREE || {};
+            const curSub = taxonomy[state.pickerState.subject];
+            let submodulesObj = curSub?.submodules || {};
+            if (Object.keys(submodulesObj).length === 0 && curSub?.types) {
+                submodulesObj = Object.assign({}, curSub.types.practice?.submodules || {}, curSub.types.lecture?.submodules || {});
+            }
 
-        const taxonomy = state.taxonomy || window.TAXONOMY_TREE || {};
-        const curSub = taxonomy[state.pickerState.subject];
-        let submodulesObj = curSub?.submodules || {};
-        if (Object.keys(submodulesObj).length === 0 && curSub?.types) {
-            submodulesObj = Object.assign({}, curSub.types.practice?.submodules || {}, curSub.types.lecture?.submodules || {});
-        }
+            const modKeys = Object.keys(submodulesObj || {});
+            modKeys.forEach(k => {
+                const opt = document.createElement('option');
+                opt.value = k;
+                opt.textContent = submodulesObj[k].name;
+                subSelect.appendChild(opt);
+            });
 
-        const modKeys = Object.keys(submodulesObj || {});
-        modKeys.forEach(k => {
-            const opt = document.createElement('option');
-            opt.value = k;
-            opt.textContent = submodulesObj[k].name;
-            subSelect.appendChild(opt);
-        });
-
-        if (submoduleId && submodulesObj[submoduleId]) {
-            state.pickerState.submodule = submoduleId;
-            subSelect.value = submoduleId;
-        } else {
-            state.pickerState.submodule = modKeys[0] || '';
-            subSelect.value = state.pickerState.submodule;
+            if (submoduleId && submodulesObj[submoduleId]) {
+                state.pickerState.submodule = submoduleId;
+                subSelect.value = submoduleId;
+            } else {
+                state.pickerState.submodule = modKeys[0] || '';
+                subSelect.value = state.pickerState.submodule;
+            }
         }
 
         // 3. 题型选择器（660专属）
         const qGroup = document.getElementById('group-question-type');
+        const taxonomy = state.taxonomy || window.TAXONOMY_TREE || {};
+        const curSub = taxonomy[state.pickerState.subject];
+        let submodulesObj = curSub?.submodules || {};
         const curModObj = submodulesObj[state.pickerState.submodule];
 
         const hasQType = !!curModObj?.hasQuestionType;
@@ -3553,30 +3642,87 @@
 
         // 4. 预设章节下拉
         const presetSelect = document.getElementById('picker-preset-select');
-        presetSelect.innerHTML = '';
+        if (presetSelect) {
+            presetSelect.innerHTML = '';
+            const presetsList = getPresetArray(state.pickerState.subject, state.pickerState.submodule, state.pickerState.questionType);
+            presetsList.forEach(p => {
+                const opt = document.createElement('option');
+                opt.value = p;
+                opt.textContent = p;
+                presetSelect.appendChild(opt);
+            });
 
-        const presetsList = getPresetArray(state.pickerState.subject, state.pickerState.submodule, state.pickerState.questionType);
-        presetsList.forEach(p => {
-            const opt = document.createElement('option');
-            opt.value = p;
-            opt.textContent = p;
-            presetSelect.appendChild(opt);
-        });
+            if (presetVal && presetsList.includes(presetVal)) {
+                state.pickerState.preset = presetVal;
+                presetSelect.value = presetVal;
+            } else {
+                state.pickerState.preset = presetsList[0] || '';
+                presetSelect.value = state.pickerState.preset;
+            }
+        }
+    }
 
-        if (presetVal && presetsList.includes(presetVal)) {
-            state.pickerState.preset = presetVal;
-            presetSelect.value = presetVal;
-        } else {
-            state.pickerState.preset = presetsList[0] || '';
-            presetSelect.value = state.pickerState.preset;
+    function addTaskToPickerStaging() {
+        if (checkReadOnlyAndWarn()) return;
+        const sub = state.pickerState.subject;
+        const modKey = state.pickerState.submodule;
+        const qType = state.pickerState.questionType;
+        const presetSelect = document.getElementById('picker-preset-select');
+        const preset = presetSelect?.value || state.pickerState.preset;
+
+        if (!preset) {
+            showToast("当前选中的板块下暂无可用预设考点，请先在题库预设中添加！", "warning");
+            return;
         }
 
-        // 5. 计划文本框
-        if (customText !== undefined && customText !== null) {
-            document.getElementById('picker-final-text').value = customText;
+        let formatted = preset;
+        const taxonomy = state.taxonomy || window.TAXONOMY_TREE || {};
+
+        if (sub === 'math') {
+            if (modKey === 'm660') {
+                const qTypeLabel = qType === 'choice' ? '选择题' : '填空题';
+                formatted = `660 ${qTypeLabel} · ${preset}`;
+            } else if (modKey === 'm1000') {
+                formatted = `1000题强化篇 · ${preset}`;
+            } else if (modKey === 'm880') {
+                formatted = `880题 · ${preset}`;
+            } else if (modKey === 'past_paper_1') {
+                formatted = `数学真题一轮 · ${preset}`;
+            } else if (modKey === 'paper_sets') {
+                formatted = `数学模拟套卷 · ${preset}`;
+            } else if (modKey === 'past_paper_2') {
+                formatted = `数学真题二轮 · ${preset}`;
+            } else {
+                const modName = taxonomy.math?.submodules?.[modKey]?.name;
+                if (modName && !preset.startsWith(modName)) formatted = `${modName} · ${preset}`;
+                else formatted = preset;
+            }
         } else {
-            updatePickerFinalText();
+            const modName = taxonomy[sub]?.submodules?.[modKey]?.name || (state.subjects?.[sub]?.name || '学科');
+            if (preset.startsWith(modName)) formatted = preset;
+            else formatted = `${modName} · ${preset}`;
         }
+
+        const presetsList = getPresetArray(sub, modKey, qType);
+        const itemIdx = presetsList.indexOf(preset);
+
+        const newTask = {
+            subject: sub,
+            modId: modKey,
+            qtype: qType,
+            itemIdx: itemIdx !== -1 ? itemIdx : 0,
+            text: formatted,
+            done: false
+        };
+
+        state.pickerState.currentTasks.push(newTask);
+        renderPickerCurrentTasks();
+    }
+
+    function clearPickerStagedTasks() {
+        if (checkReadOnlyAndWarn()) return;
+        state.pickerState.currentTasks = [];
+        renderPickerCurrentTasks();
     }
 
     window.openEditModal = function (dateKey, slot) {
@@ -3588,10 +3734,9 @@
         const banner = document.getElementById('picker-readonly-banner');
         if (banner) banner.style.display = isReadOnly ? 'flex' : 'none';
 
-        const applyBtn = document.getElementById('btn-apply-picker');
-        const clearBtn = document.getElementById('btn-clear-slot');
-        const customInput = document.getElementById('picker-custom-text');
-        const finalInput = document.getElementById('picker-final-text');
+        const applyBtn = document.getElementById('btn-confirm-picker');
+        const clearBtn = document.getElementById('btn-clear-slot-tasks');
+        const addBtn = document.getElementById('btn-add-task-to-slot');
         const presetSelect = document.getElementById('picker-preset-select');
         const subSelect = document.getElementById('picker-submodule-select');
 
@@ -3605,13 +3750,10 @@
             clearBtn.style.opacity = isReadOnly ? '0.5' : '';
             clearBtn.style.cursor = isReadOnly ? 'not-allowed' : 'pointer';
         }
-        if (customInput) {
-            customInput.disabled = isReadOnly;
-            customInput.style.opacity = isReadOnly ? '0.6' : '';
-        }
-        if (finalInput) {
-            finalInput.disabled = isReadOnly;
-            finalInput.style.opacity = isReadOnly ? '0.6' : '';
+        if (addBtn) {
+            addBtn.disabled = isReadOnly;
+            addBtn.style.opacity = isReadOnly ? '0.5' : '';
+            addBtn.style.cursor = isReadOnly ? 'not-allowed' : 'pointer';
         }
         if (presetSelect) presetSelect.disabled = isReadOnly;
         if (subSelect) subSelect.disabled = isReadOnly;
@@ -3619,79 +3761,19 @@
         openModal('modal-cascading-picker');
     };
 
-    function setEditMode(mode) {
-        state.editMode = mode;
-        document.querySelectorAll('#edit-mode-tabs .edit-mode-tab').forEach(tab => {
-            if (tab.getAttribute('data-tab') === mode) tab.classList.add('active');
-            else tab.classList.remove('active');
-        });
-
-        if (mode === 'mode-preset') {
-            document.getElementById('section-picker-preset').style.display = 'block';
-            document.getElementById('section-picker-custom').style.display = 'none';
-        } else {
-            document.getElementById('section-picker-preset').style.display = 'none';
-            document.getElementById('section-picker-custom').style.display = 'block';
-        }
-    }
-
     function setPickerSubject(subjectId) {
-        applyPickerStateFull(subjectId, null, 'choice', null, null);
+        applyPickerStateFull(subjectId, null, 'choice', null);
     }
     window.setPickerSubject = setPickerSubject;
 
     function setPickerQuestionType(qType) {
-        applyPickerStateFull(state.pickerState.subject, state.pickerState.submodule, qType, null, null);
-    }
-
-    function updatePickerFinalText() {
-        const sub = state.pickerState.subject;
-        const modKey = state.pickerState.submodule;
-        const qType = state.pickerState.questionType;
-        const preset = document.getElementById('picker-preset-select').value || state.pickerState.preset;
-
-        let formatted = preset;
-
-        if (sub === 'math') {
-            if (modKey === 'm660') {
-                const qTypeLabel = qType === 'choice' ? '选择题' : '填空题';
-                formatted = `660 ${qTypeLabel}${preset}`;
-            } else if (modKey === 'm1000') {
-                formatted = `1000题强化篇 · ${preset}`;
-            } else if (modKey === 'm880') {
-                formatted = `880题 · ${preset}`;
-            } else if (modKey === 'past_paper_1') {
-                formatted = `数学真题一轮 · ${preset}`;
-            } else if (modKey === 'paper_sets') {
-                formatted = `数学模拟套卷 · ${preset}`;
-            } else if (modKey === 'past_paper_2') {
-                formatted = `数学真题二轮 · ${preset}`;
-            } else {
-                const taxonomy = state.taxonomy || window.TAXONOMY_TREE || {};
-                const modName = taxonomy.math?.submodules?.[modKey]?.name;
-                if (modName && !preset.startsWith(modName)) formatted = `${modName} · ${preset}`;
-                else formatted = preset;
-            }
-        } else {
-            const taxonomy = state.taxonomy || window.TAXONOMY_TREE || {};
-            const modName = taxonomy[sub]?.submodules?.[modKey]?.name || (state.subjects?.[sub]?.name || '学科');
-            if (preset.startsWith(modName)) formatted = preset;
-            else formatted = `${modName} · ${preset}`;
-        }
-
-        document.getElementById('picker-final-text').value = formatted;
+        applyPickerStateFull(state.pickerState.subject, state.pickerState.submodule, qType, null);
     }
 
     function confirmPickerApply() {
         if (checkReadOnlyAndWarn()) return;
-        const finalText = document.getElementById('picker-final-text').value.trim();
         const targetDate = state.pickerTarget.date;
         const targetSlot = state.pickerTarget.slot;
-
-        let subject = state.pickerState.subject;
-        if (state.editMode === 'mode-custom') {
-            subject = document.getElementById('custom-input-subject').value;
-        }
 
         if (!state.schedule[targetDate]) {
             showToast("无效的目标日期！", "error");
@@ -3704,17 +3786,12 @@
             state.schedule[targetDate].isRest = false;
         }
 
-        if (!state.schedule[targetDate][targetSlot]) {
-            state.schedule[targetDate][targetSlot] = { text: '', subject: subject };
-        }
-
-        state.schedule[targetDate][targetSlot].text = finalText;
-        state.schedule[targetDate][targetSlot].subject = subject;
+        state.schedule[targetDate][targetSlot] = JSON.parse(JSON.stringify(state.pickerState.currentTasks || []));
 
         saveData();
         closeModal('modal-cascading-picker');
-        renderTimeline();
-        showToast(`已成功更新 ${targetDate} 的【${targetSlot === 'morning' ? '上午' : (targetSlot === 'afternoon' ? '下午' : '晚上')}】计划！`, "success", { undoSnapshot: snapshot });
+        renderAll();
+        showToast(`已成功保存 ${targetDate} 的【${targetSlot === 'morning' ? '上午' : (targetSlot === 'afternoon' ? '下午' : '晚上')}】计划！`, "success", { undoSnapshot: snapshot });
     }
 
     function initEditModalEvents() {
@@ -3724,15 +3801,19 @@
                 const targetBtn = e.target.closest('.slot-tab-btn');
                 if (!targetBtn) return;
                 const newSlot = targetBtn.getAttribute('data-slot');
+                const modal = document.getElementById('modal-cascading-picker');
                 if (newSlot && newSlot !== state.pickerTarget.slot) {
+                    if (isModalDirty(modal)) {
+                        if (!confirm('切换时段将放弃当前未保存的修改，是否继续？')) {
+                            return;
+                        }
+                    }
                     loadSlotIntoPicker(state.pickerTarget.date, newSlot);
+                    if (modal) {
+                        modal.__initialFormState = getModalFormSnapshot(modal);
+                        modal.__dismissAttempts = 0;
+                    }
                 }
-            });
-        });
-
-        document.querySelectorAll('#edit-mode-tabs .edit-mode-tab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                setEditMode(tab.getAttribute('data-tab'));
             });
         });
 
@@ -3743,7 +3824,7 @@
         });
 
         document.getElementById('picker-submodule-select')?.addEventListener('change', (e) => {
-            applyPickerStateFull(state.pickerState.subject, e.target.value, state.pickerState.questionType, null, null);
+            applyPickerStateFull(state.pickerState.subject, e.target.value, state.pickerState.questionType, null);
         });
 
         document.querySelectorAll('#picker-qtype-chips .cascade-chip').forEach(chip => {
@@ -3754,15 +3835,31 @@
 
         document.getElementById('picker-preset-select')?.addEventListener('change', (e) => {
             state.pickerState.preset = e.target.value;
-            updatePickerFinalText();
         });
 
-        document.getElementById('btn-close-picker')?.addEventListener('click', () => closeModal('modal-cascading-picker'));
-        document.getElementById('btn-cancel-picker')?.addEventListener('click', () => closeModal('modal-cascading-picker'));
+        document.getElementById('btn-add-task-to-slot')?.addEventListener('click', addTaskToPickerStaging);
+        document.getElementById('btn-clear-slot-tasks')?.addEventListener('click', clearPickerStagedTasks);
+
+        document.getElementById('btn-close-picker')?.addEventListener('click', () => requestCloseModal('modal-cascading-picker'));
+        document.getElementById('btn-cancel-picker')?.addEventListener('click', () => {
+            const modal = document.getElementById('modal-cascading-picker');
+            if (isModalDirty(modal)) {
+                if (!confirm('当前时段有未保存的任务变动，确定要放弃修改并退出吗？')) {
+                    return;
+                }
+            }
+            closeModal('modal-cascading-picker');
+        });
         document.getElementById('btn-confirm-picker')?.addEventListener('click', confirmPickerApply);
 
         // 快速跳转至预设库 Tab
         document.getElementById('btn-quick-manage-presets')?.addEventListener('click', () => {
+            const modal = document.getElementById('modal-cascading-picker');
+            if (isModalDirty(modal)) {
+                if (!confirm('跳转到预设管理将放弃当前时段未保存的修改，是否继续？')) {
+                    return;
+                }
+            }
             closeModal('modal-cascading-picker');
             switchTab('tab-presets');
             state.hubState.subject = state.pickerState.subject;
@@ -3848,11 +3945,7 @@
         const allKeys = Object.keys(state.schedule).sort();
         for (const k of allKeys) {
             if (k > fromDate) {
-                const plan = state.schedule[k];
-                if (!plan) continue;
-                if (plan.morning?.text || plan.afternoon?.text || plan.evening?.text) {
-                    return true;
-                }
+                if (hasDayTasks(k)) return true;
             }
         }
         return false;
@@ -3860,8 +3953,11 @@
 
     function hasDayTasks(dateKey) {
         const plan = state.schedule[dateKey];
-        if (!plan) return false;
-        return !!(plan.morning?.text || plan.afternoon?.text || plan.evening?.text);
+        if (!plan || plan.isRest) return false;
+        const m = window.getSlotTasks ? window.getSlotTasks(plan, 'morning') : [];
+        const a = window.getSlotTasks ? window.getSlotTasks(plan, 'afternoon') : [];
+        const e = window.getSlotTasks ? window.getSlotTasks(plan, 'evening') : [];
+        return (m.length > 0 || a.length > 0 || e.length > 0);
     }
 
     // 休息日 / 学习日切换 (支持保持空白与自动提前选择，以及学习日转休息日顺延)
@@ -3879,7 +3975,6 @@
                 // 没有任务，直接切换为休息日
                 const snapshot = takeWorkspaceSnapshot();
                 state.schedule[dateKey].isRest = true;
-                state.schedule[dateKey].note = '例行休息日';
                 saveData();
                 renderAll();
                 updateBadgeCounts();
@@ -3907,10 +4002,9 @@
                 // 后面没有任务：直接改为空白学习日，无需弹窗！
                 const snapshot = takeWorkspaceSnapshot();
                 state.schedule[dateKey].isRest = false;
-                state.schedule[dateKey].morning = { text: '', subject: 'math' };
-                state.schedule[dateKey].afternoon = { text: '', subject: 'math' };
-                state.schedule[dateKey].evening = { text: '', subject: 'major' };
-                state.schedule[dateKey].note = '';
+                state.schedule[dateKey].morning = [];
+                state.schedule[dateKey].afternoon = [];
+                state.schedule[dateKey].evening = [];
                 saveData();
                 renderAll();
                 updateBadgeCounts();
@@ -3963,18 +4057,16 @@
                 if (isSunday) {
                     state.schedule[lastDateKey] = {
                         isRest: true,
-                        morning: { text: '', subject: 'math' },
-                        afternoon: { text: '', subject: 'math' },
-                        evening: { text: '', subject: 'major' },
-                        note: '例行休息日'
+                        morning: [],
+                        afternoon: [],
+                        evening: []
                     };
                 } else {
                     state.schedule[lastDateKey] = {
                         isRest: false,
-                        morning: { text: '', subject: 'math' },
-                        afternoon: { text: '', subject: 'math' },
-                        evening: { text: '', subject: 'major' },
-                        note: ''
+                        morning: [],
+                        afternoon: [],
+                        evening: []
                     };
                     studyDates.push(lastDateKey);
                 }
@@ -3982,9 +4074,9 @@
 
             // 2. 备份原学习日序列
             const originalContents = studyDates.map(d => ({
-                morning: JSON.parse(JSON.stringify(state.schedule[d].morning || { text: '', subject: 'math' })),
-                afternoon: JSON.parse(JSON.stringify(state.schedule[d].afternoon || { text: '', subject: 'math' })),
-                evening: JSON.parse(JSON.stringify(state.schedule[d].evening || { text: '', subject: 'major' }))
+                morning: JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(state.schedule[d], 'morning') : [])),
+                afternoon: JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(state.schedule[d], 'afternoon') : [])),
+                evening: JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(state.schedule[d], 'evening') : []))
             }));
 
             // 3. 从后往前赋值到 i + 1
@@ -4007,10 +4099,9 @@
 
             // 4. 将当前日期设为休息日
             state.schedule[dateKey].isRest = true;
-            if (scope === 'all' || scope === 'morning') state.schedule[dateKey].morning = { text: '', subject: 'math' };
-            if (scope === 'all' || scope === 'afternoon') state.schedule[dateKey].afternoon = { text: '', subject: 'math' };
-            if (scope === 'all' || scope === 'evening') state.schedule[dateKey].evening = { text: '', subject: 'major' };
-            state.schedule[dateKey].note = '临时调整休息日';
+            if (scope === 'all' || scope === 'morning') state.schedule[dateKey].morning = [];
+            if (scope === 'all' || scope === 'afternoon') state.schedule[dateKey].afternoon = [];
+            if (scope === 'all' || scope === 'evening') state.schedule[dateKey].evening = [];
 
             cleanEmptyOverflowDates();
             saveData();
@@ -4020,7 +4111,6 @@
         } else {
             // 直接设为休息日
             state.schedule[dateKey].isRest = true;
-            state.schedule[dateKey].note = '例行休息日';
             saveData();
             closeModal('modal-study-to-rest');
             renderAll();
@@ -4042,10 +4132,9 @@
         state.schedule[dateKey].isRest = false;
 
         if (choice === 'blank') {
-            state.schedule[dateKey].morning = { text: '', subject: 'math' };
-            state.schedule[dateKey].afternoon = { text: '', subject: 'math' };
-            state.schedule[dateKey].evening = { text: '', subject: 'major' };
-            state.schedule[dateKey].note = '';
+            state.schedule[dateKey].morning = [];
+            state.schedule[dateKey].afternoon = [];
+            state.schedule[dateKey].evening = [];
             saveData();
             closeModal('modal-rest-to-study');
             renderAll();
@@ -4075,60 +4164,31 @@
             const next = studyDates[i + 1];
 
             if (scope === 'all' || scope === 'morning') {
-                state.schedule[curr].morning = JSON.parse(JSON.stringify(state.schedule[next].morning || { text: '', subject: 'math' }));
+                state.schedule[curr].morning = JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(state.schedule[next], 'morning') : []));
             }
             if (scope === 'all' || scope === 'afternoon') {
-                state.schedule[curr].afternoon = JSON.parse(JSON.stringify(state.schedule[next].afternoon || { text: '', subject: 'math' }));
+                state.schedule[curr].afternoon = JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(state.schedule[next], 'afternoon') : []));
             }
             if (scope === 'all' || scope === 'evening') {
-                state.schedule[curr].evening = JSON.parse(JSON.stringify(state.schedule[next].evening || { text: '', subject: 'major' }));
+                state.schedule[curr].evening = JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(state.schedule[next], 'evening') : []));
             }
         }
 
         // 清空最后一个学习日的相应时段
         const lastKey = studyDates[studyDates.length - 1];
         if (scope === 'all' || scope === 'morning') {
-            state.schedule[lastKey].morning = { text: '', subject: 'math' };
+            state.schedule[lastKey].morning = [];
         }
         if (scope === 'all' || scope === 'afternoon') {
-            state.schedule[lastKey].afternoon = { text: '', subject: 'math' };
+            state.schedule[lastKey].afternoon = [];
         }
         if (scope === 'all' || scope === 'evening') {
-            state.schedule[lastKey].evening = { text: '', subject: 'major' };
+            state.schedule[lastKey].evening = [];
         }
 
         cleanEmptyOverflowDates();
         saveData();
     }
-
-    window.editDayNote = function (dateKey) {
-        if (!state.schedule[dateKey]) return;
-        const currentNote = state.schedule[dateKey].note || '';
-        const newNote = prompt(`编辑 ${dateKey} 的重点目标/备注：`, currentNote);
-        if (newNote !== null) {
-            const snapshot = takeWorkspaceSnapshot();
-            state.schedule[dateKey].note = newNote.trim();
-            saveData();
-            renderTimeline();
-            showToast("备注已更新！", "success", { undoSnapshot: snapshot });
-        }
-    };
-
-    window.changeMacroProgress = function (subjectKey, phaseIndex, moduleIndex, delta) {
-        const sub = state.subjects[subjectKey];
-        if (!sub || !sub.phases[phaseIndex]?.modules[moduleIndex]) return;
-
-        const snapshot = takeWorkspaceSnapshot();
-        const mod = sub.phases[phaseIndex].modules[moduleIndex];
-        const newCompleted = Math.max(0, Math.min(mod.total, mod.completed + delta));
-        mod.completed = newCompleted;
-
-        saveData();
-        renderMacroSubjects();
-        renderAnalyticsDashboard();
-        updateCountdowns();
-        showToast(`${mod.name} 进度已更新为 ${newCompleted} ${mod.unit}`, "info", { undoSnapshot: snapshot });
-    };
 
     // 智能顺延排期算法 (Smart Shift Backward - 深度支持全天/单时段与12.20超期占位)
     window.openShiftModalFrom = function (fromDate) {
@@ -4201,18 +4261,16 @@
             if (skipRest && isSunday) {
                 state.schedule[lastDateKey] = {
                     isRest: true,
-                    morning: { text: '', subject: 'math' },
-                    afternoon: { text: '', subject: 'math' },
-                    evening: { text: '', subject: 'major' },
-                    note: '例行休息日'
+                    morning: [],
+                    afternoon: [],
+                    evening: []
                 };
             } else {
                 state.schedule[lastDateKey] = {
                     isRest: false,
-                    morning: { text: '', subject: 'math' },
-                    afternoon: { text: '', subject: 'math' },
-                    evening: { text: '', subject: 'major' },
-                    note: ''
+                    morning: [],
+                    afternoon: [],
+                    evening: []
                 };
                 studyDates.push(lastDateKey);
             }
@@ -4220,9 +4278,9 @@
 
         // 3. 备份原学习日序列的对应时段内容
         const originalStudyContents = studyDates.map(d => ({
-            morning: JSON.parse(JSON.stringify(state.schedule[d].morning || { text: '', subject: 'math' })),
-            afternoon: JSON.parse(JSON.stringify(state.schedule[d].afternoon || { text: '', subject: 'math' })),
-            evening: JSON.parse(JSON.stringify(state.schedule[d].evening || { text: '', subject: 'major' }))
+            morning: JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(state.schedule[d], 'morning') : [])),
+            afternoon: JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(state.schedule[d], 'afternoon') : [])),
+            evening: JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(state.schedule[d], 'evening') : []))
         }));
 
         // 4. 自后向前按目标索引 targetIndex = i + days 赋值
@@ -4248,13 +4306,13 @@
         for (let i = 0; i < Math.min(days, studyDates.length); i++) {
             const clearKey = studyDates[i];
             if (scope === 'all' || scope === 'morning') {
-                state.schedule[clearKey].morning = { text: '', subject: 'math' };
+                state.schedule[clearKey].morning = [];
             }
             if (scope === 'all' || scope === 'afternoon') {
-                state.schedule[clearKey].afternoon = { text: '', subject: 'math' };
+                state.schedule[clearKey].afternoon = [];
             }
             if (scope === 'all' || scope === 'evening') {
-                state.schedule[clearKey].evening = { text: '', subject: 'major' };
+                state.schedule[clearKey].evening = [];
             }
         }
 
@@ -4282,40 +4340,6 @@
         renderAll();
         showToast("已自动向前压缩排期 1 天！", "success", { undoSnapshot: snapshot });
     }
-
-    // 规律排期向导
-    window.applyHabitPreset = function (type) {
-        if (type === 'eng_reading') {
-            document.getElementById('batch-start-date').value = "2026-09-01";
-            document.getElementById('batch-end-date').value = "2026-10-31";
-            document.getElementById('batch-interval').value = "2";
-            document.querySelector('input[name="batch-slot"][value="afternoon"]').checked = true;
-            document.getElementById('batch-subject').value = "english";
-            document.getElementById('batch-text').value = "英语真题阅读 · 2011-2015年真题阅读单篇精读 (每2-3天1篇)";
-        } else if (type === 'eng_obj') {
-            document.getElementById('batch-start-date').value = "2026-11-01";
-            document.getElementById('batch-end-date').value = "2026-12-15";
-            document.getElementById('batch-interval').value = "7";
-            document.querySelector('input[name="batch-slot"][value="afternoon"]').checked = true;
-            document.getElementById('batch-subject').value = "english";
-            document.getElementById('batch-text').value = "英语真题客观题 · 真题客观题全真计时模考 (完形+阅读4篇+新题型，限时80分钟)";
-        } else if (type === 'eng_writing') {
-            document.getElementById('batch-start-date').value = "2026-11-01";
-            document.getElementById('batch-end-date').value = "2026-12-15";
-            document.getElementById('batch-interval').value = "2";
-            document.querySelector('input[name="batch-slot"][value="afternoon"]').checked = true;
-            document.getElementById('batch-subject').value = "english";
-            document.getElementById('batch-text').value = "英语作文练习 · 历年真题作文限时手写仿写 (每2-3天1篇)";
-        } else if (type === 'comm_night') {
-            document.getElementById('batch-start-date').value = "2026-08-17";
-            document.getElementById('batch-end-date').value = "2026-09-15";
-            document.getElementById('batch-interval').value = "1";
-            document.querySelector('input[name="batch-slot"][value="evening"]').checked = true;
-            document.getElementById('batch-subject').value = "major";
-            document.getElementById('batch-text').value = "通原基础课 · 专业课通信原理至少看3-4个视频";
-        }
-        showToast("已载入专属规律模板参数！");
-    };
 
     function executeBatchFill() {
         if (checkReadOnlyAndWarn()) return;
@@ -4347,11 +4371,13 @@
                     return;
                 }
                 if (stepCount % interval === 0) {
-                    if (!state.schedule[dateKey][slot]) {
-                        state.schedule[dateKey][slot] = { text: '', subject: subject };
-                    }
-                    state.schedule[dateKey][slot].text = text;
-                    state.schedule[dateKey][slot].subject = subject;
+                    const currentTasks = window.getSlotTasks ? window.getSlotTasks(state.schedule[dateKey], slot) : [];
+                    const newTask = {
+                        subject: subject,
+                        text: text,
+                        done: false
+                    };
+                    state.schedule[dateKey][slot] = [newTask];
                     filledCount++;
                 }
                 stepCount++;
@@ -4559,6 +4585,9 @@
 
     function getModalFormSnapshot(modal) {
         if (!modal) return '';
+        if (modal.id === 'modal-cascading-picker') {
+            return JSON.stringify(state.pickerState?.currentTasks || []);
+        }
         const data = [];
         modal.querySelectorAll('input, textarea, select').forEach(el => {
             if (el.type === 'file' || el.readOnly || el.disabled) return;
@@ -6251,7 +6280,7 @@
                 const freshSkeleton = window.generateFullScheduleSkeleton(newStartDate, newExamDate, 'blank');
                 Object.keys(ws.schedule).forEach(oldKey => {
                     const oldPlan = ws.schedule[oldKey];
-                    if (oldPlan && (oldPlan.morning?.text || oldPlan.afternoon?.text || oldPlan.evening?.text || oldPlan.note)) {
+                    if (oldPlan && (window.hasDayTasks ? window.hasDayTasks(oldKey) : (oldPlan.morning?.length || oldPlan.afternoon?.length || oldPlan.evening?.length))) {
                         const oldDate = new Date(oldKey + "T00:00:00");
                         oldDate.setDate(oldDate.getDate() + dayDiff);
                         const y = oldDate.getFullYear();
@@ -6259,11 +6288,10 @@
                         const d = String(oldDate.getDate()).padStart(2, '0');
                         const targetKey = `${y}-${m}-${d}`;
                         if (freshSkeleton[targetKey]) {
-                            freshSkeleton[targetKey].morning = oldPlan.morning;
-                            freshSkeleton[targetKey].afternoon = oldPlan.afternoon;
-                            freshSkeleton[targetKey].evening = oldPlan.evening;
-                            freshSkeleton[targetKey].note = oldPlan.note;
-                            freshSkeleton[targetKey].isRest = oldPlan.isRest;
+                            freshSkeleton[targetKey].morning = JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(oldPlan, 'morning') : []));
+                            freshSkeleton[targetKey].afternoon = JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(oldPlan, 'afternoon') : []));
+                            freshSkeleton[targetKey].evening = JSON.parse(JSON.stringify(window.getSlotTasks ? window.getSlotTasks(oldPlan, 'evening') : []));
+                            freshSkeleton[targetKey].isRest = !!oldPlan.isRest;
                         }
                     }
                 });
@@ -6554,19 +6582,21 @@
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> 检查中...';
             btn.disabled = true;
 
+            const currentVer = window.APP_INITIAL_DATA?.version || '1.1.0';
+
             try {
                 if (window.electronAPI && window.electronAPI.checkForUpdates) {
                     const updateInfo = await window.electronAPI.checkForUpdates();
                     if (updateInfo && updateInfo.hasUpdate) {
-                        showToast(`🚀 发现新版本 v${updateInfo.latestVersion}！已在右上角显示下载按钮`, 'info');
+                        showToast(`发现新版本 v${updateInfo.latestVersion}！已在右上角显示下载按钮`, 'info');
                     } else {
-                        showToast('当前已是最新版本 KaoyanFlow v1.0.0！', 'success');
+                        showToast(`当前已是最新版本 KaoyanFlow v${currentVer}！`, 'success');
                     }
                 } else {
-                    showToast('当前已是最新版本 KaoyanFlow v1.0.0！', 'success');
+                    showToast(`当前已是最新版本 KaoyanFlow v${currentVer}！`, 'success');
                 }
             } catch (err) {
-                showToast('检查更新完成，当前已是最新版本', 'info');
+                showToast(`当前已是最新版本 KaoyanFlow v${currentVer}！`, 'info');
             } finally {
                 btn.innerHTML = originalHtml;
                 btn.disabled = false;
@@ -6719,16 +6749,37 @@
             });
         });
 
-        document.getElementById('btn-settings-export-json')?.addEventListener('click', () => {
+        async function exportJSONContent(filename, jsonStr) {
+            if (window.electronAPI && window.electronAPI.saveFile) {
+                const res = await window.electronAPI.saveFile({
+                    defaultPath: filename,
+                    content: jsonStr
+                });
+                if (res.canceled) {
+                    // 用户取消了保存对话框，不弹出任何误导性提示
+                    return;
+                }
+                if (res.success) {
+                    showToast("规划区数据已成功导出保存！", "success");
+                } else {
+                    showToast(`导出失败: ${res.error || '未知错误'}`, "error");
+                }
+            } else {
+                const blob = new Blob([jsonStr], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = filename;
+                a.click();
+                URL.revokeObjectURL(url);
+                showToast("规划区备份已下载！", "success");
+            }
+        }
+
+        document.getElementById('btn-settings-export-json')?.addEventListener('click', async () => {
+            const filename = `${state.workspace.name || 'KaoyanFlow'}_${getTodayDateStr()}.json`;
             const jsonStr = JSON.stringify(state.workspace, null, 2);
-            const blob = new Blob([jsonStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `${state.workspace.name}_${getTodayDateStr()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast("本规划区备份已下载！", "success");
+            await exportJSONContent(filename, jsonStr);
         });
 
         document.getElementById('btn-settings-import-json')?.addEventListener('click', () => {
@@ -6753,16 +6804,10 @@
             openModal('modal-backup');
         });
 
-        document.getElementById('btn-download-json-file')?.addEventListener('click', () => {
+        document.getElementById('btn-download-json-file')?.addEventListener('click', async () => {
             const jsonStr = document.getElementById('export-json-text').value;
-            const blob = new Blob([jsonStr], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = `kaoyan_planner_all_workspaces_${getTodayDateStr()}.json`;
-            a.click();
-            URL.revokeObjectURL(url);
-            showToast("完整备份文件已下载！", "success");
+            const filename = `kaoyan_planner_all_workspaces_${getTodayDateStr()}.json`;
+            await exportJSONContent(filename, jsonStr);
         });
 
         // 导入弹窗

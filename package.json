@@ -1,8 +1,8 @@
 {
   "name": "kaoyanflow",
   "productName": "KaoyanFlow",
-  "version": "1.0.0",
-  "description": "现代化任务驱动型考研备考系统",
+  "version": "1.1.0",
+  "description": "KaoyanFlow 安装向导",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -45,14 +45,20 @@
           "arch": [
             "x64"
           ]
-        },
-        {
-          "target": "nsis",
-          "arch": [
-            "arm64"
-          ]
         }
       ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "KaoyanFlow",
+      "uninstallDisplayName": "KaoyanFlow",
+      "deleteAppDataOnUninstall": false,
+      "runAfterFinish": true,
+      "include": "build/installer.nsh"
     },
     "directories": {
       "output": "dist"

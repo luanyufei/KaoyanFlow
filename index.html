@@ -20,6 +20,10 @@
     <div class="desktop-titlebar" id="desktop-titlebar">
         <div class="titlebar-left">
             <div class="titlebar-traffic-space"></div>
+            <div class="titlebar-win-brand" id="titlebar-win-brand">
+                <i class="fa-solid fa-graduation-cap titlebar-brand-icon"></i>
+                <span class="titlebar-brand-title">KaoyanFlow · 现代化任务驱动型考研备考系统</span>
+            </div>
         </div>
         
         <!-- Center Workspace Selector (居中工作区切换胶囊) -->
@@ -523,25 +527,31 @@
                     </div>
                 </div>
 
-                <!-- 模式切换: 预设 vs 自定义 -->
-                <div class="form-group">
-                    <label class="form-label">编辑方式：</label>
-                    <div class="edit-mode-tabs" id="edit-mode-tabs">
-                        <button type="button" class="edit-mode-tab active" data-tab="mode-preset">
-                            <i class="fa-solid fa-list-check" style="margin-right:4px;"></i>
-                            <span>从题库与知识库预设选择</span>
+                <!-- 本时段已排任务列表 (支持单时段多任务) -->
+                <div class="form-group mb-3">
+                    <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
+                        <label class="form-label" style="margin-bottom: 0;">
+                            <i class="fa-solid fa-layer-group" style="margin-right:4px; color:var(--color-primary);"></i>
+                            本时段已排任务 (<span id="picker-task-count">0</span> 项)：
+                        </label>
+                        <button type="button" class="btn btn-xs btn-ghost" id="btn-clear-slot-tasks" style="color:var(--color-danger); font-size:11px;" title="清空本时段所有任务并设为空">
+                            <i class="fa-solid fa-trash-can"></i> 清空此时段 (设为无任务)
                         </button>
-                        <button type="button" class="edit-mode-tab" data-tab="mode-custom">
-                            <i class="fa-solid fa-pen-nib" style="margin-right:4px;"></i>
-                            <span>直接自定义输入</span>
-                        </button>
+                    </div>
+                    <div class="picker-tasks-container" id="picker-tasks-container">
+                        <!-- Populated dynamically with tasks and delete buttons -->
                     </div>
                 </div>
 
-                <!-- Section A: 预设模式 -->
-                <div id="section-picker-preset">
+                <!-- 从题库与知识库预设添加任务 -->
+                <div class="picker-add-section-card">
+                    <div class="picker-add-section-title">
+                        <i class="fa-solid fa-plus-circle" style="color:var(--color-primary); margin-right:4px;"></i>
+                        从题库与知识库预设添加任务
+                    </div>
+
                     <!-- Cascade Level 1: 学科 -->
-                    <div class="form-group">
+                    <div class="form-group mt-2">
                         <label class="form-label">第 1 步 · 选择学科：</label>
                         <div class="cascade-radio-chips" id="picker-subject-chips">
                             <button type="button" class="cascade-chip active" data-value="math"><i class="fa-solid fa-calculator"></i> 数学一</button>
@@ -580,25 +590,10 @@
                             <!-- Populated dynamically -->
                         </select>
                     </div>
-                </div>
 
-                <!-- Section B: 直接自定义模式 -->
-                <div id="section-picker-custom" style="display: none;">
-                    <div class="form-group">
-                        <label class="form-label">选择学科归属：</label>
-                        <select class="form-input" id="custom-input-subject">
-                            <option value="math">数学</option>
-                            <option value="major">专业课</option>
-                            <option value="english">英语</option>
-                            <option value="politics">思想政治理论</option>
-                        </select>
-                    </div>
-                </div>
-
-                <!-- 最终确认与自定义微调 -->
-                <div class="form-group">
-                    <label class="form-label">计划内容（可直接修改）：</label>
-                    <textarea class="form-textarea" id="picker-final-text" rows="3" placeholder="在此输入或微调该时段的计划内容..."></textarea>
+                    <button type="button" class="btn btn-secondary btn-block" id="btn-add-task-to-slot" style="margin-top: 10px;">
+                        <i class="fa-solid fa-plus"></i> 添加此预设到本时段
+                    </button>
                 </div>
             </div>
             <div class="modal-footer">
@@ -1919,15 +1914,18 @@
                                     </div>
                                     <div class="about-app-title-group">
                                         <div class="about-app-name-row">
-                                            <span class="about-app-name">KaoyanFlow</span>
-                                            <span class="badge badge-primary">v1.0.0</span>
+                                            <a class="about-app-name-link" href="https://github.com/luanyufei/KaoyanFlow" target="_blank" rel="noopener noreferrer" title="访问 GitHub 开源仓库">
+                                                <span class="about-app-name">KaoyanFlow</span>
+                                                <i class="fa-solid fa-arrow-up-right-from-square about-link-icon" style="font-size:12px; margin-left:4px; color:var(--text-muted);"></i>
+                                            </a>
+                                            <span class="badge badge-primary" id="about-app-version-badge">v1.1.0</span>
                                         </div>
-                                        <div class="about-app-tagline">现代化、任务驱动型考研备考排期与宏观攻坚系统</div>
+                                        <div class="about-app-tagline">现代化任务驱动型考研备考系统</div>
                                     </div>
                                 </div>
 
                                 <div class="settings-card-group about-author-card">
-                                    <div class="settings-card-title"><i class="fa-solid fa-user-tie" style="margin-right:5px;"></i> 关于作者</div>
+                                    <div class="settings-card-title"><i class="fa-solid fa-user-tie" style="margin-right:5px;"></i> 关于作者与联系方式</div>
                                     <div class="about-author-row">
                                         <div class="about-avatar-box">
                                             <img src="assets/avatar.png" alt="luanyufei" class="about-avatar-img" onerror="if(window.AUTHOR_AVATAR_DATA && this.src!==window.AUTHOR_AVATAR_DATA){this.src=window.AUTHOR_AVATAR_DATA;}else{this.style.display='none'; if(this.nextElementSibling) this.nextElementSibling.style.display='flex';}" style="width:100%; height:100%; object-fit:cover; border-radius:50%;">
@@ -1937,20 +1935,38 @@
                                         </div>
                                         <div class="about-author-meta">
                                             <div class="about-author-name" id="about-author-nickname">FEEFEENOON</div>
-                                            <a class="about-github-link" href="https://github.com/luanyufei" target="_blank" rel="noopener noreferrer" title="访问开发者 GitHub 主页">
-                                                <i class="fa-brands fa-github"></i>
-                                                <span>github.com/luanyufei</span>
-                                                <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px;"></i>
-                                            </a>
+                                            <div class="about-links-row" style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-top: 4px;">
+                                                <a class="about-github-link" href="https://github.com/luanyufei" target="_blank" rel="noopener noreferrer" title="访问开发者 GitHub 主页">
+                                                    <i class="fa-brands fa-github"></i>
+                                                    <span>github.com/luanyufei</span>
+                                                    <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px;"></i>
+                                                </a>
+                                                <a class="about-github-link" href="mailto:noonyufei@gmail.com" title="发送邮件给作者">
+                                                    <i class="fa-regular fa-envelope" style="color:var(--color-primary);"></i>
+                                                    <span>noonyufei@gmail.com</span>
+                                                </a>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
                                 <div class="settings-card-group about-update-card">
-                                    <div class="settings-card-title"><i class="fa-solid fa-cloud-arrow-down" style="margin-right:5px;"></i> 软件版本与检查更新</div>
+                                    <div class="settings-card-title"><i class="fa-solid fa-code-fork" style="margin-right:5px;"></i> 开源仓库与反馈</div>
+                                    <div class="about-update-action-row" style="margin-bottom: 8px;">
+                                        <div class="about-update-info">
+                                            <a class="about-repo-url-link" href="https://github.com/luanyufei/KaoyanFlow" target="_blank" rel="noopener noreferrer" style="color:var(--text-main); text-decoration:none; font-size:12.5px; font-weight:600; display:flex; align-items:center; gap:6px;">
+                                                <i class="fa-brands fa-github" style="font-size:15px; color:var(--text-main);"></i>
+                                                <span>luanyufei/KaoyanFlow</span>
+                                                <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px; color:var(--text-muted);"></i>
+                                            </a>
+                                        </div>
+                                        <a href="https://github.com/luanyufei/KaoyanFlow/issues/new" target="_blank" rel="noopener noreferrer" class="btn btn-outline btn-sm" id="btn-submit-feedback-issue" title="在 GitHub 提交反馈建议或问题">
+                                            <i class="fa-solid fa-bug"></i> 反馈建议 / 提交 Issue
+                                        </a>
+                                    </div>
                                     <div class="about-update-action-row">
                                         <div class="about-update-info">
-                                            <span class="about-update-status" id="about-update-status-text"><i class="fa-solid fa-circle-check" style="color:var(--color-success); margin-right:4px;"></i>当前已是最新版本 (v1.0.0)</span>
+                                            <span class="about-update-status" id="about-update-status-text"><i class="fa-solid fa-circle-check" style="color:var(--color-success); margin-right:4px;"></i>当前已是最新版本 (v1.1.0)</span>
                                         </div>
                                         <button type="button" class="btn btn-secondary btn-sm" id="btn-check-app-update">
                                             <i class="fa-solid fa-arrows-rotate"></i> 检查更新
@@ -1966,7 +1982,7 @@
                                             <span class="badge badge-rose" style="background:var(--color-politics-bg); color:var(--color-politics-text); border:1px solid var(--color-politics-border);"><i class="fa-solid fa-ban"></i> 未经授权禁止商用</span>
                                         </div>
                                         <p class="license-text">
-                                            Copyright &copy; 2026 <strong>luanyufei</strong>. 本项目基于 MIT 协议完全开源，免费供考研学子个人学习与复习规划使用。未经原作者书面授权，严禁任何机构或个人将本项目全部或部分源码用于商业营利、课程捆绑或二次闭源转售。
+                                            Copyright &copy; 2026 <strong>luanyufei</strong>. 本项目基于 MIT 协议完全开源，供考研学子个人学习与复习规划使用。未经原作者书面授权，严禁任何机构或个人将本项目全部或部分源码用于商业营利、课程捆绑或二次闭源转售。
                                         </p>
                                     </div>
                                 </div>
@@ -2084,7 +2100,7 @@
             <div class="status-bar-divider"></div>
             <div class="status-version-tag">
                 <i class="fa-solid fa-code-branch" style="font-size:10px; margin-right:3px;"></i>
-                <span>KaoyanFlow v1.0.0</span>
+                <span>KaoyanFlow v1.1.0</span>
             </div>
         </div>
     </footer>

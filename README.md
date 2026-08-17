@@ -7,11 +7,12 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/luanyufei/KaoyanFlow/releases"><img src="https://img.shields.io/badge/Release-v1.0.0-2563eb?style=flat-square&logo=github" alt="Release"></a>
+  <a href="https://github.com/luanyufei/KaoyanFlow/releases"><img src="https://img.shields.io/badge/Release-v1.1.0-2563eb?style=flat-square&logo=github" alt="Release"></a>
   <img src="https://img.shields.io/badge/Platform-macOS%20(Apple%20Silicon)%20%7C%20Windows-475569?style=flat-square&logo=apple" alt="Platform">
   <img src="https://img.shields.io/badge/Stack-Electron%2033%20%7C%20Vanilla%20JS-059669?style=flat-square&logo=javascript" alt="Stack">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-d97706?style=flat-square" alt="License"></a>
   <a href="https://github.com/luanyufei"><img src="https://img.shields.io/badge/Author-FEEFEENOON-7c3aed?style=flat-square" alt="Author"></a>
+  <a href="mailto:noonyufei@gmail.com"><img src="https://img.shields.io/badge/Email-noonyufei@gmail.com-ea580c?style=flat-square&logo=gmail" alt="Email"></a>
 </p>
 
 <p align="center">
@@ -22,10 +23,14 @@
   <a href="#快速开始">快速开始</a> •
   <a href="#本地打包">本地打包</a> •
   <a href="#项目结构">项目结构</a> •
-  <a href="#版权与许可">版权与许可</a>
+  <a href="#版权与联系">版权与联系</a>
 </p>
 
 </div>
+
+<p align="center">
+  <img src="assets/images/preview-dark.png" alt="KaoyanFlow 界面全景预览" width="920">
+</p>
 
 ---
 
@@ -161,8 +166,10 @@ KaoyanFlow/
 
 ---
 
-## 版权与许可 (Copyright & License)
+## 版权与联系 (Copyright & Contact)
 
-- **版权归属**：本项目由 [FEEFEENOON (luanyufei)](https://github.com/luanyufei) 独立设计与开发，享有完整的原创著作权。
-- **严禁商用声明**：本项目仅供考研个人学习交流与备考规划使用。**未经原作者明确书面授权许可，严禁任何个人或商业机构将本项目的全部或部分代码、编译安装包、界面设计、逻辑实现及衍生版本用于任何形式的商业盈利、收费课程、付费分发或捆绑销售**。
-- **开源协议**：本项目基于 [MIT License](LICENSE) 协议开源。在合规的非商业用途下，任何引用或二次开发均须完整保留原作者署名及原始版权声明。
+- **作者与版权**：本项目由 [FEEFEENOON (luanyufei)](https://github.com/luanyufei) 独立设计与开发，享有完整著作权。
+- **联系邮箱**：[noonyufei@gmail.com](mailto:noonyufei@gmail.com)，欢迎交流备考建议与体验反馈。
+- **严禁商用**：本项目仅供考研个人学习与备考规划使用。未经原作者书面授权，严禁用于任何形式的商业盈利、收费课程、付费分发或捆绑销售。
+- **开源协议**：本项目基于 [MIT License](LICENSE) 协议开源。在合规的非商业用途下，任何引用均须保留原作者署名与版权声明。
+

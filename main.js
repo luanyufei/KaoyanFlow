@@ -1,8 +1,15 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, ipcMain, shell, Menu, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
 let mainWindow = null;
+const isMac = process.platform === 'darwin';
+const isWin = process.platform === 'win32';
+
+// 针对 Windows/Linux 彻底禁用系统顶部默认菜单栏 (去除 File Edit View 栏)
+if (!isMac) {
+    Menu.setApplicationMenu(null);
+}
 
 // 数据存储路径：系统标准的 userData 目录 (例如 macOS: ~/Library/Application Support/kaoyanflow/KaoyanFlow_Data)
 const dataDir = path.join(app.getPath('userData'), 'KaoyanFlow_Data');
@@ -28,10 +35,15 @@ function createWindow() {
         height: 880,
         minWidth: 1040,
         minHeight: 700,
-        title: 'KaoyanFlow - 现代化任务驱动型考研备考系统',
+        title: 'KaoyanFlow · 现代化任务驱动型考研备考系统',
         backgroundColor: '#ffffff',
-        titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
-        trafficLightPosition: { x: 14, y: 11 },
+        titleBarStyle: isMac ? 'hiddenInset' : (isWin ? 'hidden' : 'default'),
+        titleBarOverlay: isWin ? {
+            color: '#ffffff',
+            symbolColor: '#475569',
+            height: 38
+        } : false,
+        trafficLightPosition: isMac ? { x: 14, y: 11 } : undefined,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),
             contextIsolation: true,
@@ -39,6 +51,10 @@ function createWindow() {
             sandbox: false
         }
     });
+
+    if (!isMac) {
+        mainWindow.removeMenu();
+    }
 
     mainWindow.loadFile('index.html');
 
@@ -153,6 +169,52 @@ ipcMain.handle('shell:openDataFolder', async () => {
     ensureDataDirectories();
     await shell.openPath(dataDir);
     return true;
+});
+
+// 7. 在外部默认浏览器中打开指定链接
+ipcMain.handle('shell:openExternal', async (event, url) => {
+    if (typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('mailto:'))) {
+        await shell.openExternal(url);
+        return true;
+    }
+    return false;
+});
+
+// 8. 动态更新 Windows 标题栏控制按钮配色
+ipcMain.handle('window:updateTitleBarOverlay', async (event, options) => {
+    if (isWin && mainWindow && typeof mainWindow.setTitleBarOverlay === 'function') {
+        try {
+            mainWindow.setTitleBarOverlay(options);
+        } catch (e) {
+            console.error('[TitleBarOverlay] 更新失败:', e);
+        }
+    }
+    return true;
+});
+
+// 9. 原生安全保存文件对话框 (解决导出时未保存就提示已下载的问题)
+ipcMain.handle('dialog:saveFile', async (event, options = {}) => {
+    try {
+        const { defaultPath, content } = options;
+        const win = (mainWindow && !mainWindow.isDestroyed()) ? mainWindow : null;
+        const result = await dialog.showSaveDialog(win, {
+            defaultPath: defaultPath || 'KaoyanFlow_Backup.json',
+            filters: [
+                { name: 'JSON 数据文件', extensions: ['json'] },
+                { name: '所有文件', extensions: ['*'] }
+            ]
+        });
+
+        if (result.canceled || !result.filePath) {
+            return { canceled: true };
+        }
+
+        fs.writeFileSync(result.filePath, content || '', 'utf-8');
+        return { canceled: false, success: true, filePath: result.filePath };
+    } catch (err) {
+        console.error('[Dialog Save] 保存文件失败:', err);
+        return { canceled: false, success: false, error: err.message };
+    }
 });
 
 // ==========================================================================
@@ -355,16 +417,29 @@ ipcMain.handle('updater:quitAndInstall', async () => {
 // 应用程序生命周期
 // ==========================================================================
 
-app.whenReady().then(() => {
-    createWindow();
+const gotTheSingleInstanceLock = app.requestSingleInstanceLock();
 
-    app.on('activate', () => {
-        if (BrowserWindow.getAllWindows().length === 0) createWindow();
+if (!gotTheSingleInstanceLock) {
+    app.quit();
+} else {
+    app.on('second-instance', () => {
+        if (mainWindow) {
+            if (mainWindow.isMinimized()) mainWindow.restore();
+            mainWindow.focus();
+        }
     });
-});
 
-app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit();
-    }
-});
+    app.whenReady().then(() => {
+        createWindow();
+
+        app.on('activate', () => {
+            if (BrowserWindow.getAllWindows().length === 0) createWindow();
+        });
+    });
+
+    app.on('window-all-closed', () => {
+        if (process.platform !== 'darwin') {
+            app.quit();
+        }
+    });
+}

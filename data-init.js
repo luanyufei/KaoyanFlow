@@ -661,18 +661,16 @@ function generateFullScheduleSkeleton(startDateStr = DEFAULT_SCHEDULE_START, end
             if (isRest) {
                 schedule[dateKey] = {
                     isRest: true,
-                    morning: { text: "", subject: "pending" },
-                    afternoon: { text: "", subject: "pending" },
-                    evening: { text: "", subject: "pending" },
-                    note: note || "例行休息日"
+                    morning: [],
+                    afternoon: [],
+                    evening: []
                 };
             } else {
                 schedule[dateKey] = {
                     isRest: false,
-                    morning: slots.includes('morning') ? { text: "", subject: "pending" } : { text: "", subject: "off", off: true },
-                    afternoon: slots.includes('afternoon') ? { text: "", subject: "pending" } : { text: "", subject: "off", off: true },
-                    evening: slots.includes('evening') ? { text: "", subject: "pending" } : { text: "", subject: "off", off: true },
-                    note: ""
+                    morning: [],
+                    afternoon: [],
+                    evening: []
                 };
             }
         }
@@ -1631,12 +1629,138 @@ function createSampleWorkspace() {
     };
 }
 
+/**
+ * 全局工作区数据迁移转换器 (v1.0.0 -> v1.1.0 自动无感平滑迁移)
+ * 1. 结构化任务瘦身：单字符串任务转换为结构化任务数组 [ { subject, modId, qtype, itemIdx, text } ]
+ * 2. 彻底清理已弃用的 day.note / 便签字段
+ * 3. 升级 schemaVersion 至 2
+ */
+function migrateWorkspaceData(ws) {
+    if (!ws || typeof ws !== 'object') return ws;
+    
+    if (!ws.schedule || typeof ws.schedule !== 'object') {
+        ws.schedule = {};
+    }
+
+    const taxonomy = ws.taxonomy || window.TAXONOMY_TREE || {};
+
+    Object.keys(ws.schedule).forEach(dateKey => {
+        const day = ws.schedule[dateKey];
+        if (!day || typeof day !== 'object') return;
+
+        // 移除废弃的 note 字段
+        if ('note' in day) {
+            delete day.note;
+        }
+
+        ['morning', 'afternoon', 'evening'].forEach(slotKey => {
+            const slot = day[slotKey];
+            if (!slot) {
+                day[slotKey] = [];
+                return;
+            }
+
+            // 如果已经是新版任务数组格式
+            if (Array.isArray(slot)) {
+                day[slotKey] = slot.filter(t => t && (t.text || t.modId || (t.subject && t.subject !== 'pending')));
+                return;
+            }
+
+            // 如果是包装对象包含 tasks 数组
+            if (Array.isArray(slot.tasks)) {
+                day[slotKey] = slot.tasks.filter(t => t && (t.text || t.modId || (t.subject && t.subject !== 'pending')));
+                return;
+            }
+
+            // 如果是旧版单对象格式 { text, subject, done, off, ... }
+            if (typeof slot === 'object') {
+                if (slot.off) {
+                    day[slotKey] = [];
+                    return;
+                }
+                const text = String(slot.text || '').trim();
+                const subject = slot.subject || 'pending';
+                if (!text || text === '未安排' || text.startsWith('点击编辑') || text.startsWith('点击安排') || subject === 'pending') {
+                    day[slotKey] = [];
+                } else {
+                    let matchedModId = slot.modId || null;
+                    let matchedIdx = slot.itemIdx !== undefined ? slot.itemIdx : null;
+                    let matchedQType = slot.qtype || null;
+
+                    if (!matchedModId && taxonomy && taxonomy[subject]?.submodules) {
+                        const submods = taxonomy[subject].submodules;
+                        for (const mId of Object.keys(submods)) {
+                            const mod = submods[mId];
+                            if (mod.hasQuestionType && mod.questionTypes) {
+                                for (const qk of Object.keys(mod.questionTypes)) {
+                                    const qObj = mod.questionTypes[qk];
+                                    if (Array.isArray(qObj.presets)) {
+                                        const idx = qObj.presets.findIndex(p => text.includes(p) || p.includes(text));
+                                        if (idx !== -1) {
+                                            matchedModId = mId;
+                                            matchedQType = qk;
+                                            matchedIdx = idx;
+                                            break;
+                                        }
+                                    }
+                                }
+                            } else if (Array.isArray(mod.presets)) {
+                                const idx = mod.presets.findIndex(p => text.includes(p) || p.includes(text));
+                                if (idx !== -1) {
+                                    matchedModId = mId;
+                                    matchedIdx = idx;
+                                    break;
+                                }
+                            }
+                            if (matchedModId) break;
+                        }
+                    }
+
+                    day[slotKey] = [{
+                        subject: subject,
+                        text: text,
+                        modId: matchedModId,
+                        qtype: matchedQType,
+                        itemIdx: matchedIdx,
+                        done: !!slot.done
+                    }];
+                }
+            } else {
+                day[slotKey] = [];
+            }
+        });
+    });
+
+    ws.schemaVersion = 2;
+    return ws;
+}
+
+function getSlotTasks(day, slotKey) {
+    if (!day) return [];
+    const slot = day[slotKey];
+    if (!slot) return [];
+    if (Array.isArray(slot)) {
+        return slot.filter(t => t && (t.text || t.modId || (t.subject && t.subject !== 'pending')));
+    }
+    if (typeof slot === 'object') {
+        if (Array.isArray(slot.tasks)) {
+            return slot.tasks.filter(t => t && (t.text || t.modId || (t.subject && t.subject !== 'pending')));
+        }
+        if (slot.text && slot.text.trim() && slot.subject && slot.subject !== 'pending') {
+            return [slot];
+        }
+    }
+    return [];
+}
+
 // 导出全局初始数据对象与分类树
 window.TAXONOMY_TREE = TAXONOMY_TREE;
 window.generateFullScheduleSkeleton = generateFullScheduleSkeleton;
 window.generateWorkspaceMilestones = generateWorkspaceMilestones;
 window.createDefaultWorkspaceSkeleton = createDefaultWorkspaceSkeleton;
 window.createSampleWorkspace = createSampleWorkspace;
+window.migrateWorkspaceData = migrateWorkspaceData;
+window.getSlotTasks = getSlotTasks;
 window.APP_INITIAL_DATA = {
     schedule: generateFullScheduleSkeleton(),
     subjects: INITIAL_MACRO_SUBJECTS,
@@ -1646,5 +1770,6 @@ window.APP_INITIAL_DATA = {
     startDate: DEFAULT_SCHEDULE_START,
     endDate: DEFAULT_SCHEDULE_END,
     examDate: EXAM_DATE,
-    version: "1.0.0"
+    version: "1.1.0"
 };
+

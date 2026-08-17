@@ -440,6 +440,46 @@ body {
     flex-shrink: 0;
 }
 
+.titlebar-win-brand {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-main);
+    white-space: nowrap;
+}
+
+.titlebar-win-brand .titlebar-brand-icon {
+    color: var(--color-primary);
+    font-size: 13px;
+}
+
+.titlebar-win-brand .titlebar-brand-title {
+    color: var(--text-main);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+}
+
+body.platform-win .titlebar-traffic-space {
+    display: none;
+}
+
+body.platform-win .titlebar-win-brand {
+    display: flex;
+}
+
+body.platform-win .titlebar-left {
+    width: auto;
+    max-width: 42%;
+    display: flex;
+    align-items: center;
+}
+
+body.platform-win .titlebar-right {
+    padding-right: 138px; /* Windows Window Control Buttons offset */
+}
+
 .titlebar-center {
     display: flex;
     align-items: center;
@@ -3516,6 +3556,126 @@ body {
     border-color: var(--color-primary);
     box-shadow: var(--shadow-xs);
 }
+
+/* ==========================================================================
+   Multi-Task Slot Picker Styles (支持单时段多任务)
+   ========================================================================== */
+
+.picker-tasks-container {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-height: 52px;
+    max-height: 180px;
+    overflow-y: auto;
+    background: var(--bg-subtle);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 8px;
+}
+
+.picker-empty-tasks-hint {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 12px;
+    color: var(--text-muted);
+    font-size: 12px;
+    font-style: italic;
+}
+
+.picker-task-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 6px 10px;
+    font-size: 12px;
+    transition: all var(--transition-fast);
+}
+
+.picker-task-item:hover {
+    border-color: var(--border-focus);
+    box-shadow: var(--shadow-xs);
+}
+
+.picker-task-item-left {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    overflow: hidden;
+}
+
+.picker-task-item-title {
+    color: var(--text-main);
+    font-weight: 500;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.btn-remove-picker-task {
+    background: transparent;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    transition: all var(--transition-fast);
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-remove-picker-task:hover {
+    color: var(--color-danger);
+    background: rgba(239, 68, 68, 0.12);
+}
+
+.picker-add-section-card {
+    background: var(--bg-card-alt);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-sm);
+    padding: 12px;
+}
+
+.picker-add-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-main);
+    display: flex;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.table-slot-tasks-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    width: 100%;
+}
+
+.table-task-entry {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    overflow: hidden;
+}
+
+.table-task-entry .table-slot-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
 
 /* ==========================================================================
    Cascade Sync Impact Warning Box

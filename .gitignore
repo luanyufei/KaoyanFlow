@@ -11,7 +11,6 @@ node_modules/
 
 # Production Builds & Packaging Outputs
 dist/
-build/
 *.app
 *.app/
 *.dmg
@@ -22,6 +21,7 @@ build/
 # AI Collaboration & Private Internal Guides (User Excluded)
 AGENTS.md
 scratch/
+suggestions/
 
 # IDE & Editor Configs
 .vscode/
