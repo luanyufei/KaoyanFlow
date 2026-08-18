@@ -217,6 +217,34 @@ ipcMain.handle('dialog:saveFile', async (event, options = {}) => {
     }
 });
 
+// 10. 读取开机自启动状态 (兼容 macOS 与 Windows)
+ipcMain.handle('system:getAutoStart', async () => {
+    try {
+        const settings = app.getLoginItemSettings();
+        return { success: true, openAtLogin: !!settings.openAtLogin };
+    } catch (err) {
+        console.error('[AutoStart] 读取自启动状态失败:', err);
+        return { success: false, openAtLogin: false, error: err.message };
+    }
+});
+
+// 11. 设置开机自启动 (兼容 macOS 与 Windows)
+ipcMain.handle('system:setAutoStart', async (event, enable) => {
+    try {
+        const openAtLogin = !!enable;
+        app.setLoginItemSettings({
+            openAtLogin: openAtLogin,
+            openAsHidden: false
+        });
+        const settings = app.getLoginItemSettings();
+        return { success: true, openAtLogin: !!settings.openAtLogin };
+    } catch (err) {
+        console.error('[AutoStart] 设置自启动失败:', err);
+        return { success: false, error: err.message };
+    }
+});
+
+
 // ==========================================================================
 // 自动更新检查与进度下载引擎 (Auto-Updater IPC & Lifecycle)
 // ==========================================================================
@@ -340,9 +368,17 @@ async function checkGitHubUpdates() {
     });
 }
 
+function parseSemVer(v) {
+    const clean = String(v || '1.0.0').replace(/^v/i, '').trim();
+    const core = clean.split('-')[0];
+    const parts = core.split('.').map(n => parseInt(n, 10) || 0);
+    while (parts.length < 3) parts.push(0);
+    return parts;
+}
+
 function isNewerVersion(current, latest) {
-    const p1 = String(current || '1.0.0').split('.').map(Number);
-    const p2 = String(latest || '1.0.0').split('.').map(Number);
+    const p1 = parseSemVer(current);
+    const p2 = parseSemVer(latest);
     for (let i = 0; i < Math.max(p1.length, p2.length); i++) {
         const num1 = p1[i] || 0;
         const num2 = p2[i] || 0;

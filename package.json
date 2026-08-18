@@ -34,8 +34,7 @@
       "category": "public.app-category.education",
       "identity": null,
       "target": [
-        "dmg",
-        "zip"
+        "dmg"
       ]
     },
     "win": {
@@ -51,7 +50,7 @@
     "nsis": {
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
-      "perMachine": false,
+      "perMachine": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
       "shortcutName": "KaoyanFlow",

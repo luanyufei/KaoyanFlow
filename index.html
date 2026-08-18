@@ -1619,8 +1619,8 @@
                             <span>起止日期</span>
                         </button>
                         <button type="button" class="settings-nav-btn" data-pane="pane-display" onclick="window.switchSettingsPane('pane-display')">
-                            <i class="fa-solid fa-palette"></i>
-                            <span>显示偏好</span>
+                            <i class="fa-solid fa-sliders"></i>
+                            <span>系统与显示</span>
                         </button>
                         <button type="button" class="settings-nav-btn" data-pane="pane-manage" onclick="window.switchSettingsPane('pane-manage')">
                             <i class="fa-solid fa-hard-drive"></i>
@@ -1781,6 +1781,16 @@
                                     <label class="checkbox-label">
                                         <input type="checkbox" id="settings-show-past-days">
                                         <span>默认显示今天之前的过去日期</span>
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="settings-card-group" id="settings-autostart-card">
+                                <div class="settings-card-title"><i class="fa-solid fa-desktop" style="margin-right:5px;"></i> 系统偏好</div>
+                                <div class="form-group checkbox-group" style="margin-bottom:0;">
+                                    <label class="checkbox-label">
+                                        <input type="checkbox" id="settings-auto-start">
+                                        <span>开机自动启动</span>
                                     </label>
                                 </div>
                             </div>

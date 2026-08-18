@@ -6137,7 +6137,28 @@
             delBtn.style.cursor = isReadOnly ? 'not-allowed' : 'pointer';
         }
 
-        ['settings-user-name', 'settings-workspace-name', 'settings-target-year', 'settings-start-date', 'settings-exam-date', 'settings-ai-provider', 'settings-ai-base-url', 'settings-ai-api-key', 'settings-ai-model'].forEach(id => {
+        // 开机自启动设置回填
+        const autoStartCheckbox = document.getElementById('settings-auto-start');
+        const autoStartCard = document.getElementById('settings-autostart-card');
+        if (autoStartCheckbox) {
+            if (window.electronAPI && typeof window.electronAPI.getAutoStart === 'function') {
+                if (autoStartCard) autoStartCard.style.display = 'block';
+                autoStartCheckbox.disabled = isReadOnly;
+                autoStartCheckbox.style.opacity = isReadOnly ? '0.6' : '';
+                window.electronAPI.getAutoStart().then(res => {
+                    if (res && res.success) {
+                        autoStartCheckbox.checked = !!res.openAtLogin;
+                    }
+                }).catch(err => {
+                    console.warn('[AutoStart] 读取自启动状态异常:', err);
+                });
+            } else {
+                autoStartCheckbox.checked = false;
+                autoStartCheckbox.disabled = true;
+            }
+        }
+
+        ['settings-user-name', 'settings-workspace-name', 'settings-target-year', 'settings-start-date', 'settings-exam-date', 'settings-ai-provider', 'settings-ai-base-url', 'settings-ai-api-key', 'settings-ai-model', 'settings-auto-start'].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
                 el.disabled = isReadOnly;
@@ -6320,6 +6341,14 @@
                 apiKey: (document.getElementById('settings-ai-api-key').value || '').trim(),
                 model: (document.getElementById('settings-ai-model').value || '').trim()
             };
+        }
+
+        // 同步开机自启动设置 (Electron Desktop)
+        const autoStartCheckbox = document.getElementById('settings-auto-start');
+        if (autoStartCheckbox && !autoStartCheckbox.disabled && window.electronAPI && typeof window.electronAPI.setAutoStart === 'function') {
+            window.electronAPI.setAutoStart(autoStartCheckbox.checked).catch(err => {
+                console.warn('[AutoStart] 保存自启动失败:', err);
+            });
         }
 
         // 保存并同步当前状态
@@ -6725,6 +6754,27 @@
         document.getElementById('btn-delete-current-workspace')?.addEventListener('click', deleteCurrentWorkspace);
         document.getElementById('btn-settings-clear-schedule')?.addEventListener('click', clearWorkspaceSchedule);
         document.getElementById('btn-settings-delete-workspace')?.addEventListener('click', deleteCurrentWorkspace);
+        document.getElementById('settings-auto-start')?.addEventListener('change', async (e) => {
+            if (checkReadOnlyAndWarn()) {
+                e.target.checked = !e.target.checked;
+                return;
+            }
+            if (window.electronAPI && typeof window.electronAPI.setAutoStart === 'function') {
+                const enable = e.target.checked;
+                try {
+                    const res = await window.electronAPI.setAutoStart(enable);
+                    if (res && res.success) {
+                        showToast(enable ? "✓ 已开启开机自动启动" : "✓ 已关闭开机自动启动", "info");
+                    } else {
+                        showToast("⚠️ 设置自启动失败，请检查系统权限", "error");
+                        e.target.checked = !enable;
+                    }
+                } catch (err) {
+                    showToast("⚠️ 设置自启动发生异常", "error");
+                    e.target.checked = !enable;
+                }
+            }
+        });
         document.getElementById('settings-target-year')?.addEventListener('change', (e) => {
             const tYear = parseInt(e.target.value, 10) || 27;
             syncSettingsDatesForYear(tYear);

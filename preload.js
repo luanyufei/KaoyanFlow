@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     openExternal: (url) => ipcRenderer.invoke('shell:openExternal', url),
     updateTitleBarOverlay: (options) => ipcRenderer.invoke('window:updateTitleBarOverlay', options),
     saveFile: (options) => ipcRenderer.invoke('dialog:saveFile', options),
+    getAutoStart: () => ipcRenderer.invoke('system:getAutoStart'),
+    setAutoStart: (enable) => ipcRenderer.invoke('system:setAutoStart', enable),
     
     // Auto Updater API
     checkForUpdates: () => ipcRenderer.invoke('updater:check'),
