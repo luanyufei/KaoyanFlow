@@ -80,32 +80,28 @@ KaoyanFlow 是一个本地运行的考研备考排期与进度管理桌面应用
 
 ## 系统支持
 
-| 操作系统 | 架构支持 | 最低系统版本 |
-| :--- | :--- | :--- |
-| **macOS** | **Apple Silicon (arm64)** | macOS 11.0 (Big Sur) 及以上 |
-| **Windows** | **x64 / arm64** | Windows 10 / Windows 11 |
-
-> **说明**：
-> - macOS 安装包原生适配 Apple Silicon（M 系列芯片）；
-> - Windows 安装程序内置适配 x64（Intel/AMD）与 arm64（高通骁龙/ARM 设备），安装时将自动识别并部署对应架构程序。
+| 操作系统 | 架构支持 | 最低系统要求 | 说明 |
+| :--- | :--- | :--- | :--- |
+| **macOS** | **Apple Silicon (arm64)** | macOS 11.0 (Big Sur) 及以上 | 仅支持搭载 M 系列芯片的 Mac，暂不支持 Intel (x64) 设备。 |
+| **Windows** | **x64 (64位)** | Windows 10 / Windows 11 | 原生为 x64 版本；ARM64 设备（如骁龙处理器的 Windows 电脑）可通过系统自带的 x64 模拟层正常运行。 |
 
 ---
 
 ## 安装方法
 
-直接前往 [GitHub Releases 最新发布页](https://github.com/luanyufei/KaoyanFlow/releases/latest) 下载对应系统的安装包：
+前往 [GitHub Releases 最新发布页](https://github.com/luanyufei/KaoyanFlow/releases/latest) 下载对应系统的安装包：
 
 ### macOS (Apple Silicon)
-1. 下载 `KaoyanFlow-*-arm64.dmg`（或 `.zip` 压缩包）；
-2. 双击打开镜像，将 `KaoyanFlow.app` 拖入 `Applications`（应用程序）文件夹；
+1. 下载 `KaoyanFlow-*-arm64.dmg`；
+2. 打开镜像文件，将 `KaoyanFlow.app` 拖入 `Applications`（应用程序）文件夹；
 3. 若首次打开提示“已损坏”或“无法验证开发者”，在系统终端中执行如下命令即可正常启动：
    ```bash
    xattr -cr /Applications/KaoyanFlow.app
    ```
 
-### Windows (x64 / arm64)
+### Windows (x64)
 1. 下载 `KaoyanFlow Setup *.exe`；
-2. 双击运行安装向导，按提示完成安装即可（安装程序会自动识别并部署适配您设备架构的程序）。
+2. 双击运行安装向导，按提示完成安装。
 
 ---
 
@@ -136,7 +132,7 @@ npm start
 本项目使用 `electron-builder` 进行跨平台构建打包：
 
 ```bash
-# 构建 macOS 应用程序 (.dmg / .zip)
+# 构建 macOS 应用程序 (.dmg)
 npm run build:mac
 
 # 构建 Windows 安装程序 (.exe)
